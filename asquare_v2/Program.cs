@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using sqa_core.Data;
 using sqa_core.Services;
-using Resend;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,9 +34,9 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 });
+ 
 
-// 🟢 3️⃣ CUSTOM SERVICES & RESEND (🔥 THIS IS WHAT FIXED THE ERROR)
-builder.Services.AddResend(builder.Configuration["Resend:ApiKey"]);
+
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 // 🟢 4️⃣ CONTROLLERS
