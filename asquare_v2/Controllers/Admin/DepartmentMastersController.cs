@@ -63,7 +63,7 @@ namespace sqa_core.Controllers
                     // FIX: Added a temporary ID to satisfy the 'CreatedBy NOT NULL' database constraint
                     model.CreatedBy = 1;
 
-                    _context.DepartmentMasters.Add(model);
+                    _context.DepartmentMasters.Add(model);  
                     await _context.SaveChangesAsync();
 
                     return Ok(new
