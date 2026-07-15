@@ -39,6 +39,8 @@ namespace sqa_core.Data
         public DbSet<PartMaster> PartMasters { get; set; }
         public DbSet<BatchMaster> BatchMasters { get; set; }
 
+        public DbSet<DefectMaster> DefectMasters { get; set; }
+
 
 
 
