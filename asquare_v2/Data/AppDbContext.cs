@@ -41,11 +41,15 @@ namespace sqa_core.Data
         public DbSet<DefectMaster> DefectMasters { get; set; }
 
         public DbSet<Inspection> Inspections { get; set; }
-        
 
 
 
 
+        public DbSet<ProcessAudit> ProcessAudits { get; set; }
+
+        public DbSet<SeverityMaster> SeverityMasters { get; set; }
+
+        public DbSet<ProcessAuditCAPA> ProcessAuditCAPAs { get; set; }
 
         // parts Audit
 
