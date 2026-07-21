@@ -23,6 +23,8 @@ namespace sqa_core.Models
         public DateTime? ModifiedDate { get; set; }
         public long? DeletedBy { get; set; }
         public DateTime? DeletedDate { get; set; }
+
+        public string? Defects { get; set; }
     }
     public class PartsFamilyFilter
     {

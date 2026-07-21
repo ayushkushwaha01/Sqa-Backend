@@ -39,6 +39,8 @@ namespace sqa_core.Controllers
                     pf.DeletedBy,
                     pf.DeletedDate,
 
+                    pf.Defects, 
+
                     ParametersCount = parameterGroup.Count()
                 };
 
@@ -95,6 +97,9 @@ namespace sqa_core.Controllers
                 model.IsActive = true;
                 model.IsDeleted = false;
 
+                // Entity Framework will automatically insert model.Defects here 
+                // if it is provided by the frontend. If not, it defaults to null.
+
                 _context.PartFamilies.Add(model);
 
                 await _context.SaveChangesAsync();
@@ -120,6 +125,11 @@ namespace sqa_core.Controllers
 
                 dbItem.PartFamilyName = model.PartFamilyName;
                 dbItem.PartFamilyCode = model.PartFamilyCode;
+
+                // Update the Defects column. 
+                // If the frontend sends null, this will set it to null.
+                dbItem.Defects = model.Defects;
+
                 dbItem.ModifiedBy = model.ModifiedBy;
                 dbItem.ModifiedDate = DateTime.UtcNow;
 
@@ -162,8 +172,6 @@ namespace sqa_core.Controllers
 
         // POST: api/PartFamily/delete
         [HttpPost("delete")]
-
-
         public async Task<IActionResult> Delete([FromBody] PartFamilyModel model)
         {
             var dbItem = await _context.PartFamilies.FindAsync(model.PartFamilyId);
@@ -190,14 +198,7 @@ namespace sqa_core.Controllers
             });
         }
 
-
-
-
-
-
-
         // upsert-parameter
-
         [HttpPost("upsert-parameter")]
         public async Task<IActionResult> Upsert([FromBody] ParameterModel model)
         {
@@ -277,12 +278,7 @@ namespace sqa_core.Controllers
             }
         }
 
-
-
-
         // Get- all parameters
-
-
         [HttpGet("get-parameters")]
         public async Task<IActionResult> GetParameters([FromQuery] ParameterFilter filter)
         {
@@ -298,7 +294,6 @@ namespace sqa_core.Controllers
             {
                 query = query.Where(x => x.PartMasterId == filter.PartMasterId.Value);
             }
-
 
             // Keyword Filter
             if (!string.IsNullOrWhiteSpace(filter.Keyword))
@@ -329,10 +324,6 @@ namespace sqa_core.Controllers
                 }
             });
         }
-
-
-
-
 
         // POST: api/PartFamily/delete-parameter
         [HttpPost("delete-parameter")]

@@ -41,10 +41,10 @@ namespace sqa_core.Data
 
         public DbSet<DefectMaster> DefectMasters { get; set; }
 
+        public DbSet<Inspection> Inspections { get; set; }
 
 
-
-
+        public DbSet<InspectionRef> Inspectionrefs { get; set; }
 
 
 
