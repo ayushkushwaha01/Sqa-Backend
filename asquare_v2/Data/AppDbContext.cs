@@ -42,6 +42,11 @@ namespace sqa_core.Data
         public DbSet<DefectMaster> DefectMasters { get; set; }
 
 
+        // parts Audit
+
+        public DbSet<PartsAudits> PartsAudits { get; set; }
+        public DbSet<PartsAuditParameter> PartsAuditParameters { get; set; }
+        public DbSet<UserGridSetting> UserGridSettings { get; set; }
 
 
 

@@ -15,11 +15,16 @@ namespace sqa_core.Models
         public string? Max { get; set; }
         public string? Method { get; set; }
 
-        public string? S1 { get; set; }
-        public string? S2 { get; set; }
-        public string? S3 { get; set; }
-        public string? S4 { get; set; }
-        public string? S5 { get; set; }
+        //public string? S1 { get; set; }
+        //public string? S2 { get; set; }
+        //public string? S3 { get; set; }
+        //public string? S4 { get; set; }
+        //public string? S5 { get; set; }
+        public decimal? S1 { get; set; }
+        public decimal? S2 { get; set; }
+        public decimal? S3 { get; set; }
+        public decimal? S4 { get; set; }
+        public decimal? S5 { get; set; }
 
         public string? Remarks { get; set; }
 
@@ -46,7 +51,7 @@ namespace sqa_core.Models
     {
         public long? PartFamilyId { get; set; }
         public long? PartMasterId { get; set; }
-
+        public long? PartAuditId { get; set; }
         public string? Keyword { get; set; }
 
         public bool? Status { get; set; }
