@@ -50,6 +50,11 @@ namespace sqa_core.Data
 
 
 
+        // parts Audit
+
+        public DbSet<PartsAudits> PartsAudits { get; set; }
+        public DbSet<PartsAuditParameter> PartsAuditParameters { get; set; }
+        public DbSet<UserGridSetting> UserGridSettings { get; set; }
 
 
 
