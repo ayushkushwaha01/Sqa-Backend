@@ -40,11 +40,8 @@ namespace sqa_core.Data
         public DbSet<BatchMaster> BatchMasters { get; set; }
         public DbSet<DefectMaster> DefectMasters { get; set; }
 
-        public DbSet<ProcessAudit> ProcessAudits { get; set; }
-
-        public DbSet<SeverityMaster> SeverityMasters { get; set; }
-
-        public DbSet<ProcessAuditCAPA> ProcessAuditCAPAs { get; set; }
+        public DbSet<Inspection> Inspections { get; set; }
+        
 
 
 
@@ -56,8 +53,7 @@ namespace sqa_core.Data
         public DbSet<PartsAuditParameter> PartsAuditParameters { get; set; }
         public DbSet<UserGridSetting> UserGridSettings { get; set; }
 
-
-
+        public DbSet<InspectionRef> Inspectionrefs { get; set; }
 
 
 
