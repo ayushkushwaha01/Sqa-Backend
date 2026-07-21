@@ -32,6 +32,7 @@ namespace sqa_core.Models
         public long? DeletedBy { get; set; }
 
         public DateTime? DeletedDate { get; set; }
+        public string? SupplierIds { get; set; }
     }
 
     public class PartMasterFilter

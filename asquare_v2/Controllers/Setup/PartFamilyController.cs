@@ -310,9 +310,30 @@ namespace sqa_core.Controllers
                 query = query.Where(x => x.IsActive == filter.Status.Value);
             }
 
+            //var data = await query
+            //    .OrderByDescending(x => x.CreatedDate)
+            //    .ToListAsync
+            //    
             var data = await query
-                .OrderByDescending(x => x.CreatedDate)
-                .ToListAsync();
+    .OrderByDescending(x => x.CreatedDate)
+    .Select(x => new
+    {
+        x.ParameterId,
+        x.PartId,
+        x.PartFamilyId,
+        x.PartMasterId,
+        x.ParmeterName,
+        x.Spec,
+        x.Min,
+        x.Max,
+        x.Method,
+        x.IsActive,
+
+        IsCopied = _context.PartsAuditParameters.Any(a =>
+            a.ParameterId == x.ParameterId &&
+            a.IsDeleted != true)
+    })
+    .ToListAsync();
 
             return Ok(new
             {

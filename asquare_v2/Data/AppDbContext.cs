@@ -38,11 +38,20 @@ namespace sqa_core.Data
         public DbSet<ParameterModel> Parameters { get; set; }
         public DbSet<PartMaster> PartMasters { get; set; }
         public DbSet<BatchMaster> BatchMasters { get; set; }
-
         public DbSet<DefectMaster> DefectMasters { get; set; }
 
         public DbSet<Inspection> Inspections { get; set; }
+        
 
+
+
+
+
+        // parts Audit
+
+        public DbSet<PartsAudits> PartsAudits { get; set; }
+        public DbSet<PartsAuditParameter> PartsAuditParameters { get; set; }
+        public DbSet<UserGridSetting> UserGridSettings { get; set; }
 
         public DbSet<InspectionRef> Inspectionrefs { get; set; }
 
