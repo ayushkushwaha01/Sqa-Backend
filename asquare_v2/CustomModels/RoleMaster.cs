@@ -24,5 +24,6 @@ namespace sqa_core.Models // Using your current namespace
 
         public DateTime? DeletedDate { get; set; }
         public long? DeletedBy { get; set; }
+        //thisbbis test
     }
 }
