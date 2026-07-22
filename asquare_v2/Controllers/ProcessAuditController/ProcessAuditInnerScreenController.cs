@@ -27,10 +27,10 @@ namespace sqa_core.Controllers
         private readonly AppDbContext _context;
 
         // AWS S3 Configuration
-        private readonly string _awsAccessKey = "AKIA4S6IFT5TOJC7B5BS";
-        private readonly string _awsSecretKey = "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";
+        private readonly string _awsAccessKey = "yyh";
+        private readonly string _awsSecretKey = "uuu+GEk7hn9waqPuF8FCxUkzt25";
         private readonly Amazon.RegionEndpoint _awsRegion = Amazon.RegionEndpoint.APSouth1;
-        private readonly string _bucketName = "projects-pcmx-2026";
+        private readonly string _bucketName = "projects-pcmjjjx-2026";
 
         public ProcessAuditInnerScreenController(AppDbContext context)
         {
