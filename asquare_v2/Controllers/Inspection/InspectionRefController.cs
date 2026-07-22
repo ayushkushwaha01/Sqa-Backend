@@ -5,6 +5,7 @@ using sqa_core.Models;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace sqa_core.Controllers
 {
@@ -126,6 +127,70 @@ namespace sqa_core.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { success = false, message = "Error saving parameter", error = ex.Message });
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+        // Add this DTO class at the top of your controller namespace or in your Models
+        public class BulkSampleUpdateDto
+        {
+            public int InspectionRefId { get; set; }
+            public string SampleNumber { get; set; }
+            public string? Value { get; set; } // <-- Added '?' to allow nulls
+        }
+
+        [HttpPost("UpdateSamples")]
+        public async Task<IActionResult> UpdateSamples([FromBody] JsonElement models)
+        {
+            try
+            {
+                // Enumerate over the incoming JSON array directly (No DTO required)
+                foreach (var model in models.EnumerateArray())
+                {
+                    // Extract and explicitly cast the ID to long (Int64) to fix the EF Core crash
+                    long refId = model.GetProperty("inspectionRefId").GetInt64();
+                    string sampleNumber = model.GetProperty("sampleNumber").GetString();
+
+                    // Handle the null value gracefully
+                    string? value = model.GetProperty("value").ValueKind == JsonValueKind.Null
+                                    ? null
+                                    : model.GetProperty("value").GetString();
+
+                    // Now FindAsync receives the correct 'long' type
+                    var existing = await _context.Inspectionrefs.FindAsync(refId);
+
+                    if (existing != null)
+                    {
+                        // Update the correct column based on the SampleNumber passed
+                        switch (sampleNumber?.ToLower())
+                        {
+                            case "s1": existing.S1 = value; break;
+                            case "s2": existing.S2 = value; break;
+                            case "s3": existing.S3 = value; break;
+                            case "s4": existing.S4 = value; break;
+                            case "s5": existing.S5 = value; break;
+                        }
+
+                        existing.ModifiedDate = DateTime.Now;
+                        _context.Inspectionrefs.Update(existing);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Samples updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "Error updating samples", error = ex.Message });
             }
         }
     }
