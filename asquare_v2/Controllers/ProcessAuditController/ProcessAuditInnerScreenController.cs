@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using sqa_core.Data;
 using sqa_core.Models;
+using sqa_core.Configuration;
 using System.Security.Claims;
 using System.Text.Json;
 using Amazon.S3;
@@ -10,8 +11,6 @@ using System.Linq;
 
 namespace sqa_core.Controllers
 {
-
-
     public class DeleteDocDto
     {
         public long ProcessAuditId { get; set; }
@@ -19,18 +18,17 @@ namespace sqa_core.Controllers
         public string FileUrl { get; set; }
     }
 
-
     [Route("api/[controller]")]
     [ApiController]
     public class ProcessAuditInnerScreenController : ControllerBase
     {
         private readonly AppDbContext _context;
 
-        // AWS S3 Configuration
-        private readonly string _awsAccessKey = "yyh";
-        private readonly string _awsSecretKey = "uuu+GEk7hn9waqPuF8FCxUkzt25";
-        private readonly Amazon.RegionEndpoint _awsRegion = Amazon.RegionEndpoint.APSouth1;
-        private readonly string _bucketName = "projects-pcmjjjx-2026";
+        // AWS S3 Configuration — sourced from ConfigKey (git-ignored file)
+        private readonly string _awsAccessKey = ConfigKey.Aws.AccessKey;
+        private readonly string _awsSecretKey = ConfigKey.Aws.SecretKey;
+        private readonly Amazon.RegionEndpoint _awsRegion = Amazon.RegionEndpoint.GetBySystemName(ConfigKey.Aws.Region);
+        private readonly string _bucketName = ConfigKey.Aws.BucketName;
 
         public ProcessAuditInnerScreenController(AppDbContext context)
         {
@@ -48,19 +46,17 @@ namespace sqa_core.Controllers
         {
             if (string.IsNullOrEmpty(key)) return "";
 
-            // Fallback: If it's already a full HTTP url from previous tests, just return it
             if (key.StartsWith("http")) return key;
 
             var request = new GetPreSignedUrlRequest
             {
                 BucketName = _bucketName,
                 Key = key,
-                Expires = DateTime.UtcNow.AddMinutes(60) // Link expires in 1 hour
+                Expires = DateTime.UtcNow.AddMinutes(60)
             };
             return s3Client.GetPreSignedURL(request);
         }
 
-        // 🔥 GET API: Fetches existing data so the form isn't empty 🔥
         [HttpGet("get-response")]
         public async Task<IActionResult> GetResponse([FromQuery] long processAuditId, [FromQuery] long checklistId)
         {
@@ -71,7 +67,6 @@ namespace sqa_core.Controllers
             {
                 using (var s3Client = new AmazonS3Client(_awsAccessKey, _awsSecretKey, _awsRegion))
                 {
-                    // Convert stored S3 Keys to temporary Pre-Signed URLs for the frontend
                     if (!string.IsNullOrEmpty(data.ImageDocs))
                     {
                         var keys = data.ImageDocs.Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -89,7 +84,6 @@ namespace sqa_core.Controllers
             return Ok(new { Data = data, Success = true });
         }
 
-        // 🔥 POST API: Saves or Updates the Record and Uploads to S3 🔥
         [HttpPost("save-checklist-response")]
         public async Task<IActionResult> SaveChecklistResponse([FromForm] string jsonData, [FromForm] IFormFileCollection files)
         {
@@ -98,11 +92,9 @@ namespace sqa_core.Controllers
 
             long currentUserId = GetCurrentUserId();
 
-            // 1. Calculate SOD Score safely
             string sodString = $"{model.SeverityId ?? 0}{model.Occurrence ?? 0}{model.Detection ?? 0}";
             model.SodScore = int.TryParse(sodString, out int sod) ? sod : 0;
 
-            // 2. Wipe CAPA fields if Compliance is 'Pass'
             if (model.Compliance == "Pass")
             {
                 model.Class = null;
@@ -117,11 +109,9 @@ namespace sqa_core.Controllers
                 model.SupplierRemarks = null;
             }
 
-            // 3. Check if a record for this Audit AND Checklist Question already exists
             var existingRecord = await _context.ProcessAuditCAPAs
                 .FirstOrDefaultAsync(x => x.ProcessAuditId == model.ProcessAuditId && x.ChecklistId == model.ChecklistId && x.IsDeleted != true);
 
-            // 4. AWS S3 Upload Logic
             string newPdfKeys = "";
             string newImageKeys = "";
 
@@ -134,7 +124,6 @@ namespace sqa_core.Controllers
                 {
                     foreach (var file in files)
                     {
-                        // Create a clean key to store in the DB (e.g., process-audit-docs/5/filename.jpg)
                         string s3Key = $"process-audit-docs/{model.ProcessAuditId}/{Guid.NewGuid()}_{file.FileName}";
 
                         using (var stream = file.OpenReadStream())
@@ -147,11 +136,9 @@ namespace sqa_core.Controllers
                                 ContentType = file.ContentType
                             };
 
-                            // Notice: NO CannedACL here. This fixes the AWS 500 Crash!
                             await s3Client.PutObjectAsync(putRequest);
                         }
 
-                        // Store only the keys, not the full URLs
                         if (file.ContentType.Contains("image")) imageKeysList.Add(s3Key);
                         else pdfKeysList.Add(s3Key);
                     }
@@ -161,10 +148,8 @@ namespace sqa_core.Controllers
                 newImageKeys = string.Join(",", imageKeysList);
             }
 
-            // 5. UPSERT LOGIC (Update if exists, Insert if new)
             if (existingRecord != null)
             {
-                // UPDATE EXISTING RECORD
                 existingRecord.Rating = model.Rating;
                 existingRecord.SeverityId = model.SeverityId;
                 existingRecord.Occurrence = model.Occurrence;
@@ -183,7 +168,6 @@ namespace sqa_core.Controllers
                 existingRecord.CorrectiveActions = model.CorrectiveActions;
                 existingRecord.SupplierRemarks = model.SupplierRemarks;
 
-                // Append new files to existing files (comma separated)
                 if (!string.IsNullOrEmpty(newPdfKeys))
                     existingRecord.PdfDocs = string.IsNullOrEmpty(existingRecord.PdfDocs) ? newPdfKeys : existingRecord.PdfDocs + "," + newPdfKeys;
                 if (!string.IsNullOrEmpty(newImageKeys))
@@ -192,7 +176,6 @@ namespace sqa_core.Controllers
                 existingRecord.ModifiedBy = currentUserId;
                 existingRecord.ModifiedDate = DateTime.UtcNow;
 
-                // Ensure a Reference No gets generated if they changed Compliance from Pass to Fail
                 if (existingRecord.Compliance == "Fail" && string.IsNullOrEmpty(existingRecord.ReferenceNo))
                 {
                     existingRecord.ReferenceNo = $"{DateTime.UtcNow.Year}/CAPA/{existingRecord.CapaId:D6}";
@@ -203,7 +186,6 @@ namespace sqa_core.Controllers
             }
             else
             {
-                // INSERT NEW RECORD
                 model.PdfDocs = newPdfKeys;
                 model.ImageDocs = newImageKeys;
                 model.CreatedBy = currentUserId;
@@ -213,7 +195,6 @@ namespace sqa_core.Controllers
                 _context.ProcessAuditCAPAs.Add(model);
                 await _context.SaveChangesAsync();
 
-                // Generate ReferenceNo if it's a Fail
                 if (model.Compliance == "Fail")
                 {
                     model.ReferenceNo = $"{DateTime.UtcNow.Year}/CAPA/{model.CapaId:D6}";
@@ -224,9 +205,6 @@ namespace sqa_core.Controllers
             }
         }
 
-
-
-        // 🔥 1. Fetches all CAPA records for the Grid 🔥
         [HttpGet("get-all-capas")]
         public async Task<IActionResult> GetAllCapas()
         {
@@ -236,21 +214,18 @@ namespace sqa_core.Controllers
                               from s in asup.DefaultIfEmpty()
                               join pc in _context.ProcessCategories on c.ProcessCategoryId equals pc.ProcessCategoryId into apc
                               from pc in apc.DefaultIfEmpty()
-                              where c.IsDeleted != true && c.Compliance == "Fail" // ONLY SHOW FAILED COMPLIANCE
+                              where c.IsDeleted != true && c.Compliance == "Fail"
                               orderby c.CreatedDate descending
                               select new
                               {
                                   c.CapaId,
-                                  c.ProcessAuditId,       
-                                  c.ProcessCategoryId,   
-                                  c.ChecklistId,        
+                                  c.ProcessAuditId,
+                                  c.ProcessCategoryId,
+                                  c.ChecklistId,
                                   Status = string.IsNullOrEmpty(c.Status) ? "Open" : c.Status,
                                   Resolved = c.IsResolved ?? false,
-
-                                  // Count total attached files to show in "Docs" column
                                   Docs = (string.IsNullOrEmpty(c.PdfDocs) ? 0 : c.PdfDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length) +
                                          (string.IsNullOrEmpty(c.ImageDocs) ? 0 : c.ImageDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length),
-
                                   Reference = c.ReferenceNo,
                                   ActionSubject = c.CapaSubject,
                                   SupplierName = s != null ? s.SupplierName : "",
@@ -262,23 +237,19 @@ namespace sqa_core.Controllers
                                   LogDate = c.CreatedDate,
                                   c.DueDate,
                                   Completion = c.CompletedDate,
-
-                                  // Calculate delay in days safely
                                   DelayInDays = c.DueDate.HasValue && c.CompletedDate == null && c.DueDate.Value < DateTime.UtcNow
                                                 ? (DateTime.UtcNow - c.DueDate.Value).Days : 0,
-
                                   Severity = c.SeverityId,
                                   c.Occurrence,
                                   c.Detection,
                                   RiskRating = (c.SodScore >= 800) ? "High" : (c.SodScore >= 400) ? "Medium" : "Low",
                                   c.Rating,
-                                  c.PdcaStatus  
+                                  c.PdcaStatus
                               }).ToListAsync();
 
             return Ok(new { Data = data, Success = true });
         }
 
-        // 🔥 2. Instantly updates Status or Resolved checkbox from the Grid 🔥
         [HttpPost("update-capa-status")]
         public async Task<IActionResult> UpdateCapaStatus([FromBody] ProcessAuditCAPA model)
         {
@@ -287,13 +258,12 @@ namespace sqa_core.Controllers
 
             dbItem.Status = model.Status;
             dbItem.IsResolved = model.IsResolved;
-            dbItem.ModifiedBy = GetCurrentUserId(); 
+            dbItem.ModifiedBy = GetCurrentUserId();
             dbItem.ModifiedDate = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             return Ok(new { Message = "Status Updated", Success = true });
         }
-
 
         [HttpPost("delete-document")]
         public async Task<IActionResult> DeleteDocument([FromBody] DeleteDocDto request)
@@ -305,14 +275,11 @@ namespace sqa_core.Controllers
 
             bool removed = false;
 
-            // Safely removes the S3 key from the comma-separated string
             string RemoveKey(string existingKeys, string urlToRemove)
             {
                 if (string.IsNullOrEmpty(existingKeys)) return existingKeys;
 
                 var keys = existingKeys.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-                // Match the Pre-Signed URL with the stored S3 key
                 var keyToRemove = keys.FirstOrDefault(k => urlToRemove.Contains(Uri.EscapeDataString(k)) || urlToRemove.Contains(k));
 
                 if (keyToRemove != null)
@@ -323,7 +290,6 @@ namespace sqa_core.Controllers
                 return string.Join(",", keys);
             }
 
-            // Try removing from PDF list first, if not found, try Image list
             dbItem.PdfDocs = RemoveKey(dbItem.PdfDocs, request.FileUrl);
             if (!removed) dbItem.ImageDocs = RemoveKey(dbItem.ImageDocs, request.FileUrl);
 

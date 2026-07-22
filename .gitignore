@@ -4,3 +4,6 @@
 *.user
 *.suo
 *.Backup.tmp
+
+﻿## Local secret config — never commit
+**/Configuration/ConfigKey.cs
