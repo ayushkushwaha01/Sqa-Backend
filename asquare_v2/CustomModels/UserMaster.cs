@@ -18,18 +18,18 @@ namespace sqa_core.Models
         public string Email { get; set; }
 
         [MaxLength(20)]
-        public string? PhoneNumber { get; set; }
+        public string? PhoneNumber { get; set; }  
 
         [MaxLength(255)]
-        public string? Password { get; set; }
+        public string? Password { get; set; }  
 
         public long RoleId { get; set; }
 
         [MaxLength(100)]
-        public string? Department { get; set; }
+        public string? Department { get; set; }  
 
         [MaxLength(255)]
-        public string? Manager { get; set; }
+        public string? Manager { get; set; }  
 
         public bool? IsHod { get; set; } = false;
         public bool? IsInspector { get; set; } = false;
@@ -49,9 +49,6 @@ namespace sqa_core.Models
 
         public string? ResetToken { get; set; }
         public DateTime? ResetTokenExpires { get; set; }
-
-
-        //public DateTime? ResetTokenExpires { get; set; }
 
     }
 }
