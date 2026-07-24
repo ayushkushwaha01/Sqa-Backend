@@ -4,6 +4,7 @@ using sqa_core.Data;
 using sqa_core.Models;
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace sqa_core.Controllers
@@ -24,57 +25,115 @@ namespace sqa_core.Controllers
         {
             try
             {
-                var query = from i in _context.Inspections
-                            join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
-                            from stage in stageGroup.DefaultIfEmpty()
-                            join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
-                            from shift in shiftGroup.DefaultIfEmpty()
-                            join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
-                            from inspector in inspectorGroup.DefaultIfEmpty()
-                            join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
-                            from partFamily in pfGroup.DefaultIfEmpty()
-                            join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
-                            from partCode in pcGroup.DefaultIfEmpty()
-                            join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
-                            from batch in batchGroup.DefaultIfEmpty()
+                // 1. Fetch base inspection data from the database
+                var rawData = await (from i in _context.Inspections
+                                     join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
+                                     from stage in stageGroup.DefaultIfEmpty()
+                                     join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
+                                     from shift in shiftGroup.DefaultIfEmpty()
+                                     join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
+                                     from inspector in inspectorGroup.DefaultIfEmpty()
+                                     join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
+                                     from partFamily in pfGroup.DefaultIfEmpty()
+                                     join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
+                                     from partCode in pcGroup.DefaultIfEmpty()
+                                     join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
+                                     from batch in batchGroup.DefaultIfEmpty()
+                                     where i.IsDeleted != true && i.IsArchive != true
+                                     orderby i.CreatedDate descending
+                                     select new
+                                     {
+                                         i.InspectionId,
+                                         i.ReferenceId,
+                                         i.InspectionDate,
+                                         i.Time,
+                                         i.Remarks,
+                                         i.ErrorRate,
+                                         i.Publish,
+                                         i.BatchQuantity,
+                                         i.SampleQuantity,
+                                         i.StageId,
+                                         i.SupplierId,
+                                         i.ShiftId,
+                                         i.InspectorId,
+                                         i.PartFamilyId,
+                                         i.PartCodeId,
+                                         i.BatchNumberId,
+                                         StageName = stage != null ? stage.LookupName : null,
+                                         ShiftName = shift != null ? shift.LookupName : null,
+                                         InspectorName = inspector != null ? inspector.UserName : null,
+                                         PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
+                                         PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
+                                         BatchNumber = batch != null ? batch.BatchNumber : null
+                                     }).ToListAsync();
 
-                                 
-                            where i.IsDeleted != true && i.IsArchive != true
-                            orderby i.CreatedDate descending
-                            select new
+                var inspectionIds = rawData.Select(x => x.InspectionId).ToList();
+
+                // 2. Fetch Parameter Counts by grouping tbl_inspection_ref
+                var paramCounts = await _context.Inspectionrefs
+                    .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true)
+                    .GroupBy(r => r.InspectionId)
+                    .Select(g => new { InspectionId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(k => k.InspectionId, v => v.Count);
+
+                // 3. Fetch Defects Status dictionary mapping from tbl_InspectionDefects
+                var defectsData = await _context.InspectionDefects
+                    .Where(d => inspectionIds.Contains(d.InspectionId))
+                    .ToDictionaryAsync(k => k.InspectionId, v => v.Status);
+
+                // 4. Combine the data in memory to create the final projected output
+                var finalData = rawData.Select(d =>
+                {
+                    // Extract Parameter count
+                    int pCount = paramCounts.ContainsKey(d.InspectionId) ? paramCounts[d.InspectionId] : 0;
+
+                    // Calculate Defect Fraction (Numerator = Greens (1), Denominator = Total mapped defects)
+                    string defectsFraction = "0/0";
+                    if (defectsData.ContainsKey(d.InspectionId) && !string.IsNullOrEmpty(defectsData[d.InspectionId]))
+                    {
+                        try
+                        {
+                            var statusDict = JsonSerializer.Deserialize<Dictionary<string, int>>(defectsData[d.InspectionId]);
+                            if (statusDict != null && statusDict.Count > 0)
                             {
-                                InspectionId = i.InspectionId,
-                                ReferenceId = i.ReferenceId,
-                                InspectionDate = i.InspectionDate,
-                                Time = i.Time,
-                                Remarks = i.Remarks,
-                                Defects = i.Defects,
-                                Parameters = i.Parameters,
-                                ErrorRate = i.ErrorRate,
-                                Publish = i.Publish,
-                                BatchQuantity = i.BatchQuantity,
-                                SampleQuantity = i.SampleQuantity,
+                                int totalDefects = statusDict.Count;
+                                int greenCount = statusDict.Values.Count(v => v == 1); // 1 = Green Status
+                                defectsFraction = $"{greenCount}/{totalDefects}";
+                            }
+                        }
+                        catch { /* Ignore invalid JSON */ }
+                    }
 
-                                
-                                StageId = i.StageId,
-                                SupplierId = i.SupplierId,
-                                ShiftId = i.ShiftId,
-                                InspectorId = i.InspectorId,
-                                PartFamilyId = i.PartFamilyId,
-                                PartCodeId = i.PartCodeId,
-                                BatchNumberId = i.BatchNumberId,
+                    return new
+                    {
+                        inspectionId = d.InspectionId,
+                        referenceId = d.ReferenceId,
+                        inspectionDate = d.InspectionDate,
+                        time = d.Time,
+                        remarks = d.Remarks,
+                        defects = defectsFraction,          // Overrides the DB NULL with dynamic string
+                        parameters = pCount.ToString(),     // Overrides the DB NULL with dynamic count
+                        errorRate = d.ErrorRate,
+                        publish = d.Publish,
+                        batchQuantity = d.BatchQuantity,
+                        sampleQuantity = d.SampleQuantity,
+                        stageId = d.StageId,
+                        supplierId = d.SupplierId,
+                        shiftId = d.ShiftId,
+                        inspectorId = d.InspectorId,
+                        partFamilyId = d.PartFamilyId,
+                        partCodeId = d.PartCodeId,
+                        batchNumberId = d.BatchNumberId,
+                        stageName = d.StageName,
+                        shiftName = d.ShiftName,
+                        inspectorName = d.InspectorName,
+                        partFamilyName = d.PartFamilyName,
+                        partMasterCode = d.PartMasterCode,
+                        batchNumber = d.BatchNumber
+                    };
+                }).ToList();
 
-                               
-                                StageName = stage != null ? stage.LookupName : null,
-                                ShiftName = shift != null ? shift.LookupName : null,
-                                InspectorName = inspector != null ? inspector.UserName : null,
-                                PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
-                                PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
-                                BatchNumber = batch != null ? batch.BatchNumber : null
-                            };
-
-                var data = await query.ToListAsync();
-                return Ok(new { Data = data, Success = true });
+                return Ok(new { Data = finalData, Success = true });
             }
             catch (Exception ex)
             {
@@ -83,351 +142,10 @@ namespace sqa_core.Controllers
         }
 
 
-        //[HttpPost("add-record")]
-        //public async Task<IActionResult> AddInspection([FromBody] Inspection model)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(new { Success = false, Errors = ModelState });
 
-        //    try
-        //    {
-        //        model.CreatedDate = DateTime.Now;
-        //        model.IsActive = true;
-        //        model.IsDeleted = false;
-        //        model.IsArchive = false;
 
-        //        await _context.Inspections.AddAsync(model);
-        //        await _context.SaveChangesAsync();
 
-        //        return Ok(new { Data = model, Success = true, Message = "Record added successfully." });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(500, new { Success = false, Message = $"Internal server error: {ex.Message}" });
-        //    }
-        //}
 
-
-        //[HttpPost("add-record")]
-        //public async Task<IActionResult> AddInspection([FromBody] Inspection model)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(new { Success = false, Errors = ModelState });
-
-        //    try
-        //    {
-        //        model.CreatedDate = DateTime.Now;
-        //        model.IsActive = true;
-        //        model.IsDeleted = false;
-        //        model.IsArchive = false;
-
-        //        _context.Inspections.Add(model);
-        //        await _context.SaveChangesAsync();
-
-        //        // Fetch Parameters
-        //        List<ParameterModel> parameters = new();
-
-        //        // First check PartCodeId
-        //        if (model.PartCodeId.HasValue)
-        //        {
-        //            parameters = await _context.Parameters
-        //                .Where(x =>
-        //                    x.IsDeleted != true &&
-        //                    x.IsActive == true &&
-        //                    x.PartMasterId == model.PartCodeId)   // PartCodeId -> PartMasterId
-        //                .ToListAsync();
-        //        }
-
-        //        // If not found, check PartFamilyId
-        //        if (parameters.Count == 0 && model.PartFamilyId.HasValue)
-        //        {
-        //            parameters = await _context.Parameters
-        //                .Where(x =>
-        //                    x.IsDeleted != true &&
-        //                    x.IsActive == true &&
-        //                    x.PartFamilyId == model.PartFamilyId)
-        //                .ToListAsync();
-        //        }
-
-        //        foreach (var p in parameters)
-        //        {
-        //            _context.Inspectionrefs.Add(new InspectionRef
-        //            {
-        //                InspectionId = (int)model.InspectionId,
-
-        //                // Copy from Parameter table
-        //                PartNameId = p.ParameterId,
-        //                PartFamilyId = p.PartFamilyId,
-        //                PartId = p.PartMasterId,
-        //                Spec = p.Spec,
-        //               // Unit = p.Unit,
-        //                Min = p.Min,
-        //                Max = p.Max,
-        //                Method = p.Method,
-
-        //                // Default values
-        //                Defects = 0,
-        //                Okay = false,
-        //                CAPA = null,
-        //                S1 = null,
-        //                S2 = null,
-        //                S3 = null,
-        //                S4 = null,
-        //                S5 = null,
-        //                Remarks = null,
-
-        //                IsActive = true,
-        //                IsDeleted = false,
-        //                CreatedBy = (int?)model.CreatedBy,
-        //                CreatedDate = DateTime.Now
-        //            });
-        //        }
-
-        //        await _context.SaveChangesAsync();
-
-        //        return Ok(new
-        //        {
-        //            Success = true,
-        //            Data = model,
-        //            Message = "Inspection added successfully."
-        //        });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(500, new
-        //        {
-        //            Success = false,
-        //            Message = ex.Message
-        //        });
-        //    }
-        //}
-
-
-
-
-
-
-
-        //[HttpPost("add-record")]
-        //public async Task<IActionResult> AddInspection([FromBody] Inspection model)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(new { Success = false, Errors = ModelState });
-
-        //    try
-        //    {
-        //        model.CreatedDate = DateTime.Now;
-        //        model.IsActive = true;
-        //        model.IsDeleted = false;
-        //        model.IsArchive = false;
-
-        //        _context.Inspections.Add(model);
-        //        await _context.SaveChangesAsync();
-
-        //        // Fetch Parameters
-        //        List<ParameterModel> parameters = new();
-
-        //        // First check PartCodeId
-        //        if (model.PartCodeId.HasValue)
-        //        {
-        //            parameters = await _context.Parameters
-        //                .Where(x =>
-        //                    x.IsDeleted != true &&
-        //                    x.IsActive == true &&
-        //                    x.PartMasterId == model.PartCodeId)
-        //                .ToListAsync();
-        //        }
-
-        //        // If not found, check PartFamilyId
-        //        if (parameters.Count == 0 && model.PartFamilyId.HasValue)
-        //        {
-        //            parameters = await _context.Parameters
-        //                .Where(x =>
-        //                    x.IsDeleted != true &&
-        //                    x.IsActive == true &&
-        //                    x.PartFamilyId == model.PartFamilyId)
-        //                .ToListAsync();
-        //        }
-
-        //        foreach (var p in parameters)
-        //        {
-        //            _context.Inspectionrefs.Add(new InspectionRef
-        //            {
-        //                InspectionId = model.InspectionId,
-
-        //                // --- FK MAPPING FIX ---
-        //                // PartNameId MUST be a valid Part Master ID to satisfy the SQL FK.
-        //                // Your payload sends this in PartCodeId.
-        //                PartNameId = p.ParameterId,
-
-        //                // Populate the newly added missing columns
-        //                PartMasterId = model.PartCodeId,
-        //                ParameterName = p.ParmeterName, // Adjust property name if it differs in ParameterModel
-        //                                                 // ----------------------
-
-        //                PartFamilyId = p.PartFamilyId ?? model.PartFamilyId,
-        //                PartId = p.PartId,
-
-        //                Spec = p.Spec,
-        //                //Unit = p.Unit, // Uncommented Unit since it exists in SQL
-        //                Min = p.Min,
-        //                Max = p.Max,
-        //                Method = p.Method,
-
-        //                // Default values
-        //                Defects = 0,
-        //                Okay = false,
-        //                CAPA = null,
-        //                S1 = null,
-        //                S2 = null,
-        //                S3 = null,
-        //                S4 = null,
-        //                S5 = null,
-        //                Remarks = null,
-
-        //                IsActive = true,
-        //                IsDeleted = false,
-        //                CreatedBy = model.CreatedBy,
-        //                CreatedDate = DateTime.Now
-        //            });
-        //        }
-
-        //        await _context.SaveChangesAsync();
-
-        //        return Ok(new
-        //        {
-        //            Success = true,
-        //            Data = model,
-        //            Message = "Inspection added successfully."
-        //        });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        var errorMessage = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-
-        //        return StatusCode(500, new
-        //        {
-        //            Success = false,
-        //            Message = errorMessage,
-        //            DetailedError = ex.ToString()
-        //        });
-        //    }
-        //}
-
-
-
-
-
-
-
-
-        //[HttpPost("add-record")]
-        //public async Task<IActionResult> AddInspection([FromBody] Inspection model)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(new { Success = false, Errors = ModelState });
-
-        //    try
-        //    {
-        //        model.CreatedDate = DateTime.Now;
-        //        model.IsActive = true;
-        //        model.IsDeleted = false;
-        //        model.IsArchive = false;
-
-        //        _context.Inspections.Add(model);
-
-        //        // 1. Save to database to generate the new model.InspectionId
-        //        await _context.SaveChangesAsync();
-
-        //        // 2. Generate ReferenceId
-        //        model.ReferenceId = $"{model.CreatedDate.Year}/{model.InspectionId:D5}";
-
-        //        // 3. EXPLICITLY mark the model as updated so EF knows to save the new ReferenceId
-        //        _context.Inspections.Update(model);
-
-        //        // Fetch Parameters
-        //        List<ParameterModel> parameters = new();
-
-        //        if (model.PartCodeId.HasValue)
-        //        {
-        //            parameters = await _context.Parameters
-        //                .Where(x =>
-        //                    x.IsDeleted != true &&
-        //                    x.IsActive == true &&
-        //                    x.PartMasterId == model.PartCodeId)
-        //                .ToListAsync();
-        //        }
-
-        //        if (parameters.Count == 0 && model.PartFamilyId.HasValue)
-        //        {
-        //            parameters = await _context.Parameters
-        //                .Where(x =>
-        //                    x.IsDeleted != true &&
-        //                    x.IsActive == true &&
-        //                    x.PartFamilyId == model.PartFamilyId)
-        //                .ToListAsync();
-        //        }
-
-        //        foreach (var p in parameters)
-        //        {
-        //            _context.Inspectionrefs.Add(new InspectionRef
-        //            {
-        //                InspectionId = model.InspectionId,
-
-        //                // mapped properly for SQL FK constraints
-        //                PartNameId = p.ParameterId,
-
-        //                PartMasterId = model.PartCodeId,
-        //                ParameterName = p.ParmeterName,
-
-        //                PartFamilyId = p.PartFamilyId ?? model.PartFamilyId,
-        //                PartId = p.PartId,
-
-        //                Spec = p.Spec,
-        //                //Unit = p.Unit, 
-        //                Min = p.Min,
-        //                Max = p.Max,
-        //                Method = p.Method,
-
-        //                Defects = 0,
-        //                Okay = false,
-        //                CAPA = null,
-        //                S1 = null,
-        //                S2 = null,
-        //                S3 = null,
-        //                S4 = null,
-        //                S5 = null,
-        //                Remarks = null,
-
-        //                IsActive = true,
-        //                IsDeleted = false,
-        //                CreatedBy = model.CreatedBy,
-        //                CreatedDate = DateTime.Now
-        //            });
-        //        }
-
-        //        // 4. Second save updates the main Inspection (with ReferenceId) AND inserts InspectionRefs
-        //        await _context.SaveChangesAsync();
-
-        //        return Ok(new
-        //        {
-        //            Success = true,
-        //            Data = model,
-        //            Message = "Inspection added successfully."
-        //        });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        var errorMessage = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-
-        //        return StatusCode(500, new
-        //        {
-        //            Success = false,
-        //            Message = errorMessage,
-        //            DetailedError = ex.ToString()
-        //        });
-        //    }
-        //}
 
 
 
@@ -464,6 +182,9 @@ namespace sqa_core.Controllers
 
                     // Fetch and insert parameters for the new record
                     await GenerateInspectionRefs(model);
+
+                    // Fetch and insert defects for the new record based on PartFamily
+                    await GenerateInspectionDefects(model);
                 }
                 // 2. EDIT EXISTING RECORD (ID is > 0)
                 else
@@ -474,7 +195,7 @@ namespace sqa_core.Controllers
                     if (existingRecord == null)
                         return NotFound(new { Success = false, Message = "Record not found." });
 
-                    // Check if Part has changed to rebuild Parameters
+                    // Check if Part has changed to rebuild Parameters and Defects
                     bool partChanged = existingRecord.PartCodeId != model.PartCodeId ||
                                        existingRecord.PartFamilyId != model.PartFamilyId;
 
@@ -498,14 +219,19 @@ namespace sqa_core.Controllers
 
                     if (partChanged)
                     {
+                        // Remove old References
                         var oldRefs = await _context.Inspectionrefs
                             .Where(x => x.InspectionId == existingRecord.InspectionId)
                             .ToListAsync();
-
                         _context.Inspectionrefs.RemoveRange(oldRefs);
-
-                        // Pass existingRecord to generate new references against the updated Part ID
                         await GenerateInspectionRefs(existingRecord);
+
+                        // Remove old Defects mapping
+                        var oldDefects = await _context.InspectionDefects
+                            .Where(x => x.InspectionId == existingRecord.InspectionId)
+                            .ToListAsync();
+                        _context.InspectionDefects.RemoveRange(oldDefects);
+                        await GenerateInspectionDefects(existingRecord);
                     }
                 }
 
@@ -534,7 +260,7 @@ namespace sqa_core.Controllers
             }
         }
 
-        // Extracted helper method
+        // --- Existing Parameters Helper ---
         private async Task GenerateInspectionRefs(Inspection model)
         {
             List<ParameterModel> parameters = new();
@@ -577,6 +303,47 @@ namespace sqa_core.Controllers
             }
         }
 
+        // --- NEW Defects Helper ---
+        private async Task GenerateInspectionDefects(Inspection model)
+        {
+            if (model.PartFamilyId.HasValue)
+            {
+                // Fetch the PartFamily to get the default JSON array of defects
+                var partFamily = await _context.PartFamilies
+                    .FirstOrDefaultAsync(pf => pf.PartFamilyId == model.PartFamilyId);
+
+                // Check if defects string exists and is not null/empty
+                if (partFamily != null && !string.IsNullOrEmpty(partFamily.Defects))
+                {
+                    try
+                    {
+                        // Deserialize "[4,2,3,1]" into a list of integers
+                        var defectIds = JsonSerializer.Deserialize<List<int>>(partFamily.Defects);
+
+                        if (defectIds != null && defectIds.Any())
+                        {
+                            // Initialize status for all fetched defects to 5 (Gray)
+                            // Example output: {"4": 5, "2": 5, "3": 5, "1": 5}
+                            var initialStatuses = defectIds.ToDictionary(id => id.ToString(), id => 5);
+
+                            var newInspectionDefect = new InspectionDefects
+                            {
+                                InspectionId = model.InspectionId,
+                                DefectsId = partFamily.Defects,
+                                Status = JsonSerializer.Serialize(initialStatuses)
+                            };
+
+                            _context.InspectionDefects.Add(newInspectionDefect);
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        // Log serialization errors if the database holds invalid JSON formats
+                        Console.WriteLine($"Error parsing defects for PartFamilyId {model.PartFamilyId}: {ex.Message}");
+                    }
+                }
+            }
+        }
 
 
 
@@ -584,8 +351,7 @@ namespace sqa_core.Controllers
 
 
 
-
-        [HttpPut("update-record/{id}")]
+            [HttpPut("update-record/{id}")]
         public async Task<IActionResult> UpdateInspection(long id, [FromBody] Inspection model)
         {
             var existingRecord = await _context.Inspections.FindAsync(id);
@@ -644,21 +410,6 @@ namespace sqa_core.Controllers
             return Ok(new { Message = "Record successfully archived.", Success = true });
         }
 
-
-        //[HttpPut("toggle-publish/{id}")]
-        //public async Task<IActionResult> TogglePublish(long id)
-        //{
-        //    var dbItem = await _context.Inspections.FindAsync(id);
-        //    if (dbItem == null)
-        //        return NotFound(new { Message = "Record not found", Success = false });
-
-        //    // Toggle the publish status (if true becomes false, if false becomes true)
-        //    dbItem.Publish = !dbItem.Publish;
-        //    dbItem.ModifiedDate = DateTime.Now;
-
-        //    await _context.SaveChangesAsync();
-        //    return Ok(new { Message = $"Record publish status updated.", Success = true });
-        //}
 
 
 
