@@ -18,6 +18,7 @@ namespace sqa_core.Controllers
         public string FileUrl { get; set; }
     }
 
+
     [Route("api/[controller]")]
     [ApiController]
     public class ProcessAuditInnerScreenController : ControllerBase
@@ -205,50 +206,50 @@ namespace sqa_core.Controllers
             }
         }
 
-        [HttpGet("get-all-capas")]
-        public async Task<IActionResult> GetAllCapas()
-        {
-            var data = await (from c in _context.ProcessAuditCAPAs
-                              join a in _context.ProcessAudits on c.ProcessAuditId equals a.ProcessAuditId
-                              join s in _context.SupplierMasters on a.SupplierId equals s.SupplierId into asup
-                              from s in asup.DefaultIfEmpty()
-                              join pc in _context.ProcessCategories on c.ProcessCategoryId equals pc.ProcessCategoryId into apc
-                              from pc in apc.DefaultIfEmpty()
-                              where c.IsDeleted != true && c.Compliance == "Fail"
-                              orderby c.CreatedDate descending
-                              select new
-                              {
-                                  c.CapaId,
-                                  c.ProcessAuditId,
-                                  c.ProcessCategoryId,
-                                  c.ChecklistId,
-                                  Status = string.IsNullOrEmpty(c.Status) ? "Open" : c.Status,
-                                  Resolved = c.IsResolved ?? false,
-                                  Docs = (string.IsNullOrEmpty(c.PdfDocs) ? 0 : c.PdfDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length) +
-                                         (string.IsNullOrEmpty(c.ImageDocs) ? 0 : c.ImageDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length),
-                                  Reference = c.ReferenceNo,
-                                  ActionSubject = c.CapaSubject,
-                                  SupplierName = s != null ? s.SupplierName : "",
-                                  c.ActionType,
-                                  a.AuditReference,
-                                  ProcessCategory = pc != null ? pc.Name : "",
-                                  Description = c.Remarks,
-                                  c.SupplierRemarks,
-                                  LogDate = c.CreatedDate,
-                                  c.DueDate,
-                                  Completion = c.CompletedDate,
-                                  DelayInDays = c.DueDate.HasValue && c.CompletedDate == null && c.DueDate.Value < DateTime.UtcNow
-                                                ? (DateTime.UtcNow - c.DueDate.Value).Days : 0,
-                                  Severity = c.SeverityId,
-                                  c.Occurrence,
-                                  c.Detection,
-                                  RiskRating = (c.SodScore >= 800) ? "High" : (c.SodScore >= 400) ? "Medium" : "Low",
-                                  c.Rating,
-                                  c.PdcaStatus
-                              }).ToListAsync();
+        //[HttpGet("get-all-capas")]
+        //public async Task<IActionResult> GetAllCapas()
+        //{
+        //    var data = await (from c in _context.ProcessAuditCAPAs
+        //                      join a in _context.ProcessAudits on c.ProcessAuditId equals a.ProcessAuditId
+        //                      join s in _context.SupplierMasters on a.SupplierId equals s.SupplierId into asup
+        //                      from s in asup.DefaultIfEmpty()
+        //                      join pc in _context.ProcessCategories on c.ProcessCategoryId equals pc.ProcessCategoryId into apc
+        //                      from pc in apc.DefaultIfEmpty()
+        //                      where c.IsDeleted != true && c.Compliance == "Fail"
+        //                      orderby c.CreatedDate descending
+        //                      select new
+        //                      {
+        //                          c.CapaId,
+        //                          c.ProcessAuditId,
+        //                          c.ProcessCategoryId,
+        //                          c.ChecklistId,
+        //                          Status = string.IsNullOrEmpty(c.Status) ? "Open" : c.Status,
+        //                          Resolved = c.IsResolved ?? false,
+        //                          Docs = (string.IsNullOrEmpty(c.PdfDocs) ? 0 : c.PdfDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length) +
+        //                                 (string.IsNullOrEmpty(c.ImageDocs) ? 0 : c.ImageDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length),
+        //                          Reference = c.ReferenceNo,
+        //                          ActionSubject = c.CapaSubject,
+        //                          SupplierName = s != null ? s.SupplierName : "",
+        //                          c.ActionType,
+        //                          a.AuditReference,
+        //                          ProcessCategory = pc != null ? pc.Name : "",
+        //                          Description = c.Remarks,
+        //                          c.SupplierRemarks,
+        //                          LogDate = c.CreatedDate,
+        //                          c.DueDate,
+        //                          Completion = c.CompletedDate,
+        //                          DelayInDays = c.DueDate.HasValue && c.CompletedDate == null && c.DueDate.Value < DateTime.UtcNow
+        //                                        ? (DateTime.UtcNow - c.DueDate.Value).Days : 0,
+        //                          Severity = c.SeverityId,
+        //                          c.Occurrence,
+        //                          c.Detection,
+        //                          RiskRating = (c.SodScore >= 800) ? "High" : (c.SodScore >= 400) ? "Medium" : "Low",
+        //                          c.Rating,
+        //                          c.PdcaStatus
+        //                      }).ToListAsync();
 
-            return Ok(new { Data = data, Success = true });
-        }
+        //    return Ok(new { Data = data, Success = true });
+        //}
 
         [HttpPost("update-capa-status")]
         public async Task<IActionResult> UpdateCapaStatus([FromBody] ProcessAuditCAPA model)
@@ -302,6 +303,69 @@ namespace sqa_core.Controllers
             }
 
             return BadRequest(new { Message = "Document not found in record", Success = false });
+        }
+
+        //supplier
+
+        private string GetCurrentUserType()
+        {
+            var userTypeClaim = User.FindFirstValue("UserType");
+            return string.IsNullOrEmpty(userTypeClaim) ? "Internal" : userTypeClaim;
+        }
+
+        [HttpGet("get-all-capas")]
+        public async Task<IActionResult> GetAllCapas()
+        {
+            long currentUserId = GetCurrentUserId();
+            string userType = GetCurrentUserType(); // 🔥 Get the UserType
+
+            var query = from c in _context.ProcessAuditCAPAs
+                        join a in _context.ProcessAudits on c.ProcessAuditId equals a.ProcessAuditId
+                        join s in _context.SupplierMasters on a.SupplierId equals s.SupplierId into asup
+                        from s in asup.DefaultIfEmpty()
+                        join pc in _context.ProcessCategories on c.ProcessCategoryId equals pc.ProcessCategoryId into apc
+                        from pc in apc.DefaultIfEmpty()
+                        where c.IsDeleted != true && c.Compliance == "Fail"
+                        select new { c, a, s, pc };
+
+            // 🔥 If logged in as Supplier, only return CAPAs tied to audits assigned to their SupplierId
+            if (userType == "Supplier")
+            {
+                query = query.Where(x => x.a.SupplierId == currentUserId);
+            }
+
+            var data = await query.OrderByDescending(x => x.c.CreatedDate).Select(x => new
+            {
+                x.c.CapaId,
+                x.c.ProcessAuditId,
+                x.c.ProcessCategoryId,
+                x.c.ChecklistId,
+                Status = string.IsNullOrEmpty(x.c.Status) ? "Open" : x.c.Status,
+                Resolved = x.c.IsResolved ?? false,
+                Docs = (string.IsNullOrEmpty(x.c.PdfDocs) ? 0 : x.c.PdfDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length) +
+                       (string.IsNullOrEmpty(x.c.ImageDocs) ? 0 : x.c.ImageDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length),
+                Reference = x.c.ReferenceNo,
+                ActionSubject = x.c.CapaSubject,
+                SupplierName = x.s != null ? x.s.SupplierName : "",
+                x.c.ActionType,
+                x.a.AuditReference,
+                ProcessCategory = x.pc != null ? x.pc.Name : "",
+                Description = x.c.Remarks,
+                x.c.SupplierRemarks,
+                LogDate = x.c.CreatedDate,
+                x.c.DueDate,
+                Completion = x.c.CompletedDate,
+                DelayInDays = x.c.DueDate.HasValue && x.c.CompletedDate == null && x.c.DueDate.Value < DateTime.UtcNow
+                              ? (DateTime.UtcNow - x.c.DueDate.Value).Days : 0,
+                Severity = x.c.SeverityId,
+                x.c.Occurrence,
+                x.c.Detection,
+                RiskRating = (x.c.SodScore >= 800) ? "High" : (x.c.SodScore >= 400) ? "Medium" : "Low",
+                x.c.Rating,
+                x.c.PdcaStatus
+            }).ToListAsync();
+
+            return Ok(new { Data = data, Success = true });
         }
     }
 }
