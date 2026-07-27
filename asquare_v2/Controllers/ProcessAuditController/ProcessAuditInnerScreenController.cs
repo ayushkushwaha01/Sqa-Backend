@@ -6,6 +6,7 @@ using sqa_core.Configuration;
 using System.Security.Claims;
 using System.Text.Json;
 using Amazon.S3;
+
 using Amazon.S3.Model; // Required for PutObjectRequest and GetPreSignedUrlRequest
 using System.Linq;
 
@@ -313,12 +314,65 @@ namespace sqa_core.Controllers
             return string.IsNullOrEmpty(userTypeClaim) ? "Internal" : userTypeClaim;
         }
 
-        [HttpGet("get-all-capas")]
-        public async Task<IActionResult> GetAllCapas()
-        {
-            long currentUserId = GetCurrentUserId();
-            string userType = GetCurrentUserType(); // 🔥 Get the UserType
+        //[HttpGet("get-all-capas")]
+        //public async Task<IActionResult> GetAllCapas()
+        //{
+        //    long currentUserId = GetCurrentUserId();
+        //    string userType = GetCurrentUserType(); // 🔥 Get the UserType
 
+        //    var query = from c in _context.ProcessAuditCAPAs
+        //                join a in _context.ProcessAudits on c.ProcessAuditId equals a.ProcessAuditId
+        //                join s in _context.SupplierMasters on a.SupplierId equals s.SupplierId into asup
+        //                from s in asup.DefaultIfEmpty()
+        //                join pc in _context.ProcessCategories on c.ProcessCategoryId equals pc.ProcessCategoryId into apc
+        //                from pc in apc.DefaultIfEmpty()
+        //                where c.IsDeleted != true && c.Compliance == "Fail"
+        //                select new { c, a, s, pc };
+
+        //    // 🔥 If logged in as Supplier, only return CAPAs tied to audits assigned to their SupplierId
+        //    if (userType == "Supplier")
+        //    {
+        //        query = query.Where(x => x.a.SupplierId == currentUserId);
+        //    }
+
+        //    var data = await query.OrderByDescending(x => x.c.CreatedDate).Select(x => new
+        //    {
+        //        x.c.CapaId,
+        //        x.c.ProcessAuditId,
+        //        x.c.ProcessCategoryId,
+        //        x.c.ChecklistId,
+        //        Status = string.IsNullOrEmpty(x.c.Status) ? "Open" : x.c.Status,
+        //        Resolved = x.c.IsResolved ?? false,
+        //        Docs = (string.IsNullOrEmpty(x.c.PdfDocs) ? 0 : x.c.PdfDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length) +
+        //               (string.IsNullOrEmpty(x.c.ImageDocs) ? 0 : x.c.ImageDocs.Split(',', StringSplitOptions.RemoveEmptyEntries).Length),
+        //        Reference = x.c.ReferenceNo,
+        //        ActionSubject = x.c.CapaSubject,
+        //        SupplierName = x.s != null ? x.s.SupplierName : "",
+        //        x.c.ActionType,
+        //        x.a.AuditReference,
+        //        ProcessCategory = x.pc != null ? x.pc.Name : "",
+        //        Description = x.c.Remarks,
+        //        x.c.SupplierRemarks,
+        //        LogDate = x.c.CreatedDate,
+        //        x.c.DueDate,
+        //        Completion = x.c.CompletedDate,
+        //        DelayInDays = x.c.DueDate.HasValue && x.c.CompletedDate == null && x.c.DueDate.Value < DateTime.UtcNow
+        //                      ? (DateTime.UtcNow - x.c.DueDate.Value).Days : 0,
+        //        Severity = x.c.SeverityId,
+        //        x.c.Occurrence,
+        //        x.c.Detection,
+        //        RiskRating = (x.c.SodScore >= 800) ? "High" : (x.c.SodScore >= 400) ? "Medium" : "Low",
+        //        x.c.Rating,
+        //        x.c.PdcaStatus
+        //    }).ToListAsync();
+
+        //    return Ok(new { Data = data, Success = true });
+        //}
+
+
+        [HttpGet("get-all-capas")]
+        public async Task<IActionResult> GetAllCapas([FromQuery] long? supplierId = null) // 🔥 Added parameter
+        {
             var query = from c in _context.ProcessAuditCAPAs
                         join a in _context.ProcessAudits on c.ProcessAuditId equals a.ProcessAuditId
                         join s in _context.SupplierMasters on a.SupplierId equals s.SupplierId into asup
@@ -328,10 +382,10 @@ namespace sqa_core.Controllers
                         where c.IsDeleted != true && c.Compliance == "Fail"
                         select new { c, a, s, pc };
 
-            // 🔥 If logged in as Supplier, only return CAPAs tied to audits assigned to their SupplierId
-            if (userType == "Supplier")
+            // 🔥 Filter explicitly by the passed SupplierId
+            if (supplierId.HasValue && supplierId.Value > 0)
             {
-                query = query.Where(x => x.a.SupplierId == currentUserId);
+                query = query.Where(x => x.a.SupplierId == supplierId.Value);
             }
 
             var data = await query.OrderByDescending(x => x.c.CreatedDate).Select(x => new
