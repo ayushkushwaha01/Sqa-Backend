@@ -262,6 +262,7 @@ namespace sqa_core.Controllers
                 dbItem.PartId = model.PartId;
                 dbItem.PartFamilyId = model.PartFamilyId;
                 dbItem.PartMasterId = model.PartMasterId;
+                dbItem.UnitId = model.UnitId;
 
                 dbItem.Okay = model.Okay;
 
@@ -327,7 +328,17 @@ namespace sqa_core.Controllers
         x.Min,
         x.Max,
         x.Method,
+        x.UnitId,
         x.IsActive,
+        UnitName = _context.Lookups
+            .Where(l => l.LookupId == x.UnitId)
+            .Select(l => l.LookupName)
+            .FirstOrDefault(),
+
+        CategoryName = _context.PartsAuditCategories
+                .Where(p => p.PartId == x.PartId)
+                .Select(p => p.CategoryName)
+                .FirstOrDefault(),
 
         IsCopied = _context.PartsAuditParameters.Any(a =>
             a.ParameterId == x.ParameterId &&

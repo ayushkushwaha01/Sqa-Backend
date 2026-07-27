@@ -45,6 +45,7 @@ namespace sqa_core.Models
 
         public long? DeletedBy { get; set; }
         public DateTime? DeletedDate { get; set; }
+        public long? UnitId { get; set; }
     }
 
     public class ParameterFilter

@@ -40,5 +40,6 @@ namespace sqa_core.Models
         public string? Keyword { get; set; }
 
         public bool? Status { get; set; }
+        public long? CommodityId { get; set; }
     }
 }

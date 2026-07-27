@@ -73,5 +73,7 @@ namespace sqa_core.Models
         public DateTime? ToDate { get; set; }
 
         public bool? Status { get; set; }   // IsActive
+
+        public bool? Done { get; set; }
     }
 }

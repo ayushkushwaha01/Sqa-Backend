@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using sqa_core.Data;
 using sqa_core.Models;
 
+
 namespace sqa_core.Controllers
 {
     [Route("api/[controller]")]
@@ -58,6 +59,10 @@ namespace sqa_core.Controllers
     on pa.StatusId equals l.LookupId into statusGroup
                 from status in statusGroup.DefaultIfEmpty()
 
+                join capa in _context.PartsAuditCapas.Where(x => x.IsDeleted != true)
+    on pa.PartAuditId equals capa.PartAuditId into capaGroup
+
+
                 select new
                 {
                     pa.PartAuditId,
@@ -89,6 +94,12 @@ namespace sqa_core.Controllers
                     pa.Remakrs,
                     pa.StatusId,
                     StatusName = status != null ? status.LookupName : "",
+                    // CAPA Counts
+                    TotalCapaCount = capaGroup.Count(),
+
+                    ResolvedCapaCount = capaGroup.Count(x => x.IsResolved == true),
+
+                    PendingCapaCount = capaGroup.Count(x => x.IsResolved != true),
 
                     pa.IsActive,
                     pa.IsDeleted,
@@ -184,6 +195,11 @@ namespace sqa_core.Controllers
                 query = query.Where(x =>
                     x.AuditDate.HasValue &&
                     x.AuditDate.Value.Date <= filter.ToDate.Value.Date);
+            }
+
+            if (filter.Done == true)
+            {
+                query = query.Where(x => x.Done == true);
             }
 
 
@@ -465,6 +481,7 @@ namespace sqa_core.Controllers
                     Min = p.Min,
                     Max = p.Max,
                     Method = p.Method,
+                    UnitId=p.UnitId,
 
                     S1 = null,
                     S2 = null,
@@ -593,6 +610,7 @@ namespace sqa_core.Controllers
                 {
                     c.PartId,
                     c.CategoryName,
+                    c.CategoryCode,
 
                     ParametersCount = parameterGroup.Count(),
 
@@ -607,6 +625,11 @@ namespace sqa_core.Controllers
                         x.Min,
                         x.Max,
                         x.Method,
+                        x.UnitId,
+                        UnitName = _context.Lookups
+        .Where(l => l.LookupId == x.UnitId)
+        .Select(l => l.LookupName)
+        .FirstOrDefault(),
 
                         x.S1,
                         x.S2,
@@ -677,6 +700,7 @@ namespace sqa_core.Controllers
                 entity.PartId = model.PartId;
                 entity.PartFamilyId = model.PartFamilyId;
                 entity.PartMasterId = model.PartMasterId;
+                entity.UnitId = model.UnitId;
 
                 entity.ModifiedDate = DateTime.UtcNow;
             }
@@ -696,6 +720,7 @@ namespace sqa_core.Controllers
                     Min = model.Min,
                     Max = model.Max,
                     Method = model.Method,
+                    UnitId = model.UnitId,
 
                     S1 = model.S1,
                     S2 = model.S2,
@@ -803,5 +828,11 @@ namespace sqa_core.Controllers
                 Data = data
             });
         }
+
+
+
+
+
+       
     }
 }
