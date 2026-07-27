@@ -62,9 +62,22 @@ namespace sqa_core.Data
 
         public DbSet<InspectionCapa> InspectionCapas { get; set; }
 
+ public DbSet<InspectionDefects> InspectionDefects { get; set; }
+
+        // PARTS ADUIT INNER SCREEN
+
+        public DbSet<PartsAuditCapa> PartsAuditCapas { get; set; }
+        public DbSet<PartsAuditCapaDoc> PartsAuditCapaDocs { get; set; }
+
+        public DbSet<PartsAuditCapaImage> PartsAuditCapaImages { get; set; }
+       
 
 
-        public DbSet<InspectionDefects> InspectionDefects { get; set; }
+
+
+
+
+
 
 
 

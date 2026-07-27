@@ -48,7 +48,8 @@ namespace sqa_core.Models
         public long? PartMasterId { get; set; }
         public long? PartFamilyId { get; set; }
         public long? PartId { get; set; }
-       
+        public long? UnitId { get; set; }
+
 
     }
 
@@ -89,5 +90,6 @@ namespace sqa_core.Models
         public string? Remarks { get; set; }
 
         public bool Okay { get; set; }
+        public long? UnitId { get; set; }
     }
 }

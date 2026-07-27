@@ -83,6 +83,11 @@ namespace sqa_core.Controllers
             {
                 query = query.Where(x => x.IsActive == filter.Status.Value);
             }
+            // Commodity Filter
+            if (filter.CommodityId.HasValue)
+            {
+                query = query.Where(x => x.CommodityId == filter.CommodityId.Value);
+            }
 
             var data = await query
                 .OrderByDescending(x => x.CreatedDate)
