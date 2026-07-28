@@ -95,6 +95,7 @@ namespace sqa_core.Controllers
                     model.CreatedDate = DateTime.Now;
                     model.IsActive = true;
                     model.IsDeleted = false;
+                    model.Okay = true;
 
                     _context.Inspectionrefs.Add(model);
                 }

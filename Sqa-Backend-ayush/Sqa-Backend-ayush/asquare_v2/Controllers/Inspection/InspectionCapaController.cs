@@ -787,7 +787,107 @@ namespace sqa_core.Controllers
         }
 
 
+
+
+
+
+
+
+
+
+
+
+
+        public class CapaEditRequestDto
+        {
+            public long CapaId { get; set; }
+            public DateTime? DueDate { get; set; }
+            public DateTime? EtaDate { get; set; }
+            public DateTime? CompletedDate { get; set; }
+            public string? AuditorRemarks { get; set; }
+            public string? AuditeeResponse { get; set; }
+        }
+
+
+        [HttpPut("UpdateCapaDetails")]
+        public async Task<IActionResult> UpdateCapaDetails([FromBody] CapaEditRequestDto request)
+        {
+            try
+            {
+                // 1. Find the existing CAPA record
+                var capa = await _context.InspectionCapas.FindAsync(request.CapaId);
+
+                if (capa == null || capa.IsDeleted)
+                {
+                    return NotFound(new { success = false, message = "CAPA record not found." });
+                }
+
+                // 2. Update the specific fields from the UI
+                capa.DueDate = request.DueDate;
+                capa.EtaDate = request.EtaDate;
+                capa.CompletedDate = request.CompletedDate;
+                capa.AuditorRemarks = request.AuditorRemarks;
+                capa.AuditeeResponse = request.AuditeeResponse;
+
+                // 3. Update the tracking timestamp
+                capa.ModifiedDate = DateTime.Now;
+
+                // 4. Save changes to the database
+                _context.InspectionCapas.Update(capa);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "CAPA details updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "Error updating CAPA details", error = ex.Message });
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+        [HttpDelete("DeleteCapa/{id}")]
+        public async Task<IActionResult> DeleteCapa(long id)
+        {
+            try
+            {
+                // 1. Find the existing CAPA record
+                var capa = await _context.InspectionCapas.FindAsync(id);
+
+                // 2. Check if it exists and hasn't already been deleted
+                if (capa == null || capa.IsDeleted)
+                {
+                    return NotFound(new { success = false, message = "CAPA record not found." });
+                }
+
+                // 3. Perform a soft delete by updating the IsDeleted flag
+                capa.IsDeleted = true;
+                capa.ModifiedDate = DateTime.Now;
+
+                // 4. Save changes to the database
+                _context.InspectionCapas.Update(capa);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "CAPA deleted successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "Error deleting CAPA", error = ex.Message });
+            }
+        }
+
+
     }
+
+
 
 
 

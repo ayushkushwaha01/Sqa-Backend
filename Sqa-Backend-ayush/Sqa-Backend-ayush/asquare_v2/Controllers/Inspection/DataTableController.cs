@@ -403,7 +403,7 @@ namespace sqa_core.Controllers
                 return NotFound(new { Message = "Record not found", Success = false });
 
             // Set to true, or toggle with: dbItem.IsArchive = !dbItem.IsArchive;
-            dbItem.IsArchive = true;
+            dbItem.IsArchive = !dbItem.IsArchive;
             dbItem.ModifiedDate = DateTime.Now;
 
             await _context.SaveChangesAsync();
@@ -434,5 +434,159 @@ namespace sqa_core.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { Message = "Record publish status updated.", Success = true });
         }
+
+
+
+
+
+
+
+
+
+
+
+
+        [HttpGet("get-all-archive")]
+        public async Task<IActionResult> GetAllarchives()
+        {
+            try
+            {
+                // 1. Fetch base inspection data from the database
+                var rawData = await (from i in _context.Inspections
+                                     join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
+                                     from stage in stageGroup.DefaultIfEmpty()
+                                     join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
+                                     from shift in shiftGroup.DefaultIfEmpty()
+                                     join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
+                                     from inspector in inspectorGroup.DefaultIfEmpty()
+                                     join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
+                                     from partFamily in pfGroup.DefaultIfEmpty()
+                                     join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
+                                     from partCode in pcGroup.DefaultIfEmpty()
+                                     join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
+                                     from batch in batchGroup.DefaultIfEmpty()
+                                     where i.IsDeleted != true && i.IsArchive != false
+                                     orderby i.CreatedDate descending
+                                     select new
+                                     {
+                                         i.InspectionId,
+                                         i.ReferenceId,
+                                         i.InspectionDate,
+                                         i.Time,
+                                         i.Remarks,
+                                         i.ErrorRate,
+                                         i.Publish,
+                                         i.BatchQuantity,
+                                         i.SampleQuantity,
+                                         i.StageId,
+                                         i.SupplierId,
+                                         i.ShiftId,
+                                         i.InspectorId,
+                                         i.PartFamilyId,
+                                         i.PartCodeId,
+                                         i.BatchNumberId,
+                                         StageName = stage != null ? stage.LookupName : null,
+                                         ShiftName = shift != null ? shift.LookupName : null,
+                                         InspectorName = inspector != null ? inspector.UserName : null,
+                                         PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
+                                         PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
+                                         BatchNumber = batch != null ? batch.BatchNumber : null
+                                     }).ToListAsync();
+
+                var inspectionIds = rawData.Select(x => x.InspectionId).ToList();
+
+
+                var paramCounts = await _context.Inspectionrefs
+                    .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true)
+                    .GroupBy(r => r.InspectionId)
+                    .Select(g => new { InspectionId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(k => k.InspectionId, v => v.Count);
+
+
+                var defectsData = await _context.InspectionDefects
+                    .Where(d => inspectionIds.Contains(d.InspectionId))
+                    .ToDictionaryAsync(k => k.InspectionId, v => v.Status);
+
+
+                var finalData = rawData.Select(d =>
+                {
+                    // Extract Parameter count
+                    int pCount = paramCounts.ContainsKey(d.InspectionId) ? paramCounts[d.InspectionId] : 0;
+
+
+                    string defectsFraction = "0/0";
+                    if (defectsData.ContainsKey(d.InspectionId) && !string.IsNullOrEmpty(defectsData[d.InspectionId]))
+                    {
+                        try
+                        {
+                            var statusDict = JsonSerializer.Deserialize<Dictionary<string, int>>(defectsData[d.InspectionId]);
+                            if (statusDict != null && statusDict.Count > 0)
+                            {
+                                int totalDefects = statusDict.Count;
+                                int greenCount = statusDict.Values.Count(v => v == 1); // 1 = Green Status
+                                defectsFraction = $"{greenCount}/{totalDefects}";
+                            }
+                        }
+                        catch { /* Ignore invalid JSON */ }
+                    }
+
+                    return new
+                    {
+                        inspectionId = d.InspectionId,
+                        referenceId = d.ReferenceId,
+                        inspectionDate = d.InspectionDate,
+                        time = d.Time,
+                        remarks = d.Remarks,
+                        defects = defectsFraction,          // Overrides the DB NULL with dynamic string
+                        parameters = pCount.ToString(),     // Overrides the DB NULL with dynamic count
+                        errorRate = d.ErrorRate,
+                        publish = d.Publish,
+                        batchQuantity = d.BatchQuantity,
+                        sampleQuantity = d.SampleQuantity,
+                        stageId = d.StageId,
+                        supplierId = d.SupplierId,
+                        shiftId = d.ShiftId,
+                        inspectorId = d.InspectorId,
+                        partFamilyId = d.PartFamilyId,
+                        partCodeId = d.PartCodeId,
+                        batchNumberId = d.BatchNumberId,
+                        stageName = d.StageName,
+                        shiftName = d.ShiftName,
+                        inspectorName = d.InspectorName,
+                        partFamilyName = d.PartFamilyName,
+                        partMasterCode = d.PartMasterCode,
+                        batchNumber = d.BatchNumber
+                    };
+                }).ToList();
+
+                return Ok(new { Data = finalData, Success = true });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Success = false, Message = ex.Message });
+            }
+        }
+
+
+
+         
+
+
+
+
+
     }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+     
+    }
