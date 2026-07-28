@@ -21,6 +21,11 @@ namespace sqa_core.Controllers
             _context = context;
         }
 
+
+
+        //hhhhh
+
+
         [HttpGet("GetDefectsByInspection/{inspectionId}")]
         public async Task<IActionResult> GetDefectsByInspection(long inspectionId)
         {
