@@ -32,6 +32,7 @@ namespace sqa_core.Models
         public long? DeletedBy { get; set; }
 
         public DateTime? DeletedDate { get; set; }
+        public string? SupplierIds { get; set; }
     }
 
     public class PartMasterFilter
@@ -39,5 +40,6 @@ namespace sqa_core.Models
         public string? Keyword { get; set; }
 
         public bool? Status { get; set; }
+        public long? CommodityId { get; set; }
     }
 }
