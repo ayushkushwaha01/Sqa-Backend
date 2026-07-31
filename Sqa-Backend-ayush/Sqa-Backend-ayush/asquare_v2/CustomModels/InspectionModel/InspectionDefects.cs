@@ -13,7 +13,7 @@ namespace sqa_core.Models
 
         public long InspectionId { get; set; }
 
-        // Stores JSON array of defect IDs, e.g., "[1,2,3]"
+        // Stores JSON array of defect IDs, e.g., "[1,2,3]" 1
         public string? DefectsId { get; set; }
 
         // Stores JSON dictionary of statuses, e.g., "{\"1\":5,\"2\":5}"

@@ -23,7 +23,7 @@ namespace sqa_core.Controllers
 
 
 
-        //hhhhh
+        //hhhhhfejfb
 
 
         [HttpGet("GetDefectsByInspection/{inspectionId}")]
