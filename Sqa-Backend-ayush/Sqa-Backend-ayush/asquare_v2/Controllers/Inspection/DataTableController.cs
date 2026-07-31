@@ -20,7 +20,7 @@ namespace sqa_core.Controllers
             _context = context;
         }
 
-        //nfieh
+
 
         //[HttpGet("get-all-records")]
         //public async Task<IActionResult> GetAllInspections()
