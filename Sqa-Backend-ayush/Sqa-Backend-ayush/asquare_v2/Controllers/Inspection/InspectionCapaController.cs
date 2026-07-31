@@ -126,6 +126,10 @@ namespace sqa_core.Controllers
             }
         }
 
+
+
+
+
         [HttpPost("SaveCapa")]
         [DisableRequestSizeLimit] // Removes the overall Kestrel request size limit for this endpoint
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)] // Removes the form-data specific limits
@@ -238,6 +242,51 @@ namespace sqa_core.Controllers
             }
         }
 
+
+
+
+
+
+        //[HttpPost("delete-document")]
+        //public async Task<IActionResult> DeleteDocument([FromBody] CapaDeleteDocDto request)
+        //{
+        //    var dbItem = await _context.InspectionCapas
+        //        .FirstOrDefaultAsync(x => x.CapaId == request.CapaId && x.IsDeleted == false);
+
+        //    if (dbItem == null) return NotFound(new { Message = "Record not found", Success = false });
+
+        //    bool removed = false;
+
+        //    // Matches the full PreSigned URL passed from the frontend to the base Key stored in the DB
+        //    string RemoveKey(string existingKeys, string urlToRemove)
+        //    {
+        //        if (string.IsNullOrEmpty(existingKeys)) return existingKeys;
+
+        //        var keys = existingKeys.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        //        var keyToRemove = keys.FirstOrDefault(k => urlToRemove.Contains(Uri.EscapeDataString(k)) || urlToRemove.Contains(k));
+
+        //        if (keyToRemove != null)
+        //        {
+        //            keys.Remove(keyToRemove);
+        //            removed = true;
+        //        }
+        //        return string.Join(",", keys);
+        //    }
+
+        //    dbItem.PdfDocs = RemoveKey(dbItem.PdfDocs, request.FileUrl);
+        //    if (!removed) dbItem.ImageDocs = RemoveKey(dbItem.ImageDocs, request.FileUrl);
+
+        //    if (removed)
+        //    {
+        //        dbItem.ModifiedDate = DateTime.UtcNow;
+        //        await _context.SaveChangesAsync();
+        //        return Ok(new { Message = "Document deleted successfully", Success = true });
+        //    }
+
+        //    return BadRequest(new { Message = "Document not found in record", Success = false });
+        //}
+
+
         [HttpPost("delete-document")]
         public async Task<IActionResult> DeleteDocument([FromBody] CapaDeleteDocDto request)
         {
@@ -254,7 +303,12 @@ namespace sqa_core.Controllers
                 if (string.IsNullOrEmpty(existingKeys)) return existingKeys;
 
                 var keys = existingKeys.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
-                var keyToRemove = keys.FirstOrDefault(k => urlToRemove.Contains(Uri.EscapeDataString(k)) || urlToRemove.Contains(k));
+
+                // Decode the URL sent from the frontend so %20 becomes a space, %28 becomes (, etc.
+                string decodedUrl = Uri.UnescapeDataString(urlToRemove);
+
+                // Find the key by checking if the fully decoded URL contains the raw DB string
+                var keyToRemove = keys.FirstOrDefault(k => decodedUrl.Contains(k));
 
                 if (keyToRemove != null)
                 {
@@ -265,7 +319,12 @@ namespace sqa_core.Controllers
             }
 
             dbItem.PdfDocs = RemoveKey(dbItem.PdfDocs, request.FileUrl);
-            if (!removed) dbItem.ImageDocs = RemoveKey(dbItem.ImageDocs, request.FileUrl);
+
+            // Only try to remove from ImageDocs if it wasn't already found and removed from PdfDocs
+            if (!removed)
+            {
+                dbItem.ImageDocs = RemoveKey(dbItem.ImageDocs, request.FileUrl);
+            }
 
             if (removed)
             {
@@ -283,50 +342,12 @@ namespace sqa_core.Controllers
 
 
 
-        //[HttpGet("GetPendingCapaRecords")]
-        //public async Task<IActionResult> GetPendingCapaRecords()
-        //{
-        //    try
-        //    {
-        //        // Join CAPA and Ref tables where Ref.Okay == false
-        //        var query = await (from capa in _context.InspectionCapas
-        //                           join ir in _context.Inspectionrefs
-        //                           on capa.InspectionRefId equals ir.InspectionRefId
-        //                           where ir.Okay == false
-        //                              && ir.IsDeleted == false
-        //                              && capa.IsDeleted == false
-        //                           select new
-        //                           {
-        //                               CapaId = capa.CapaId,
-        //                               Status = capa.PdcaStatus ?? "Open", // Defaulting if null
-        //                               Resolved = capa.CompletedDate != null,
-        //                               Docs = (capa.PdfDocs != null || capa.ImageDocs != null) ? 1 : 0,
-        //                               Reference = ir.InspectionId.ToString(), // Or custom format
-        //                               ActionSubject = capa.Subject,
-        //                               SupplierName = "N/A", // Add join to PartMasters/Suppliers if needed
-        //                               ActionType = capa.ActionType,
-        //                               AuditReference = ir.PartId.ToString(), // Map to appropriate field
-        //                               ProcessCategory = capa.Class,
-        //                               Description = capa.Observations,
-        //                               SupplierRemarks = capa.SupplierRemarks,
-        //                               LogDate = capa.CreatedDate,
-        //                               DueDate = capa.DueDate,
-        //                               Completion = capa.CompletedDate,
-        //                               Severity = capa.SeverityId,
-        //                               Occurrence = capa.Occurrence,
-        //                               Detection = capa.Detection,
-        //                               RiskRating = capa.RiskRating,
-        //                               Rating = capa.SodScore,
-        //                               PdcaStatus = capa.PdcaStatus
-        //                           }).ToListAsync();
 
-        //        return Ok(new { success = true, data = query, message = "Pending CAPA fetched successfully." });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(500, new { success = false, message = "Error fetching CAPA records", error = ex.Message });
-        //    }
-        //}
+
+
+
+
+ 
 
 
 
@@ -415,9 +436,7 @@ namespace sqa_core.Controllers
             public long CapaId { get; set; }
             public long? Status { get; set; }
             public bool? Resolved { get; set; }
-
-            // Assuming your DB model uses long? for RiskRating now. 
-            // If it is still a string in your model, change this to string.
+ 
             public String? RiskRating { get; set; }
         }
 
@@ -868,7 +887,7 @@ namespace sqa_core.Controllers
                     return NotFound(new { success = false, message = "CAPA record not found." });
                 }
 
-                // 3. Perform a soft delete by updating the IsDeleted flag
+                
                 capa.IsDeleted = true;
                 capa.ModifiedDate = DateTime.Now;
 
