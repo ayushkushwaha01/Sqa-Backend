@@ -12,7 +12,7 @@ namespace sqa_core.Models
 
         public long InspectionId { get; set; }
 
-        public long? PartNameId { get; set; } // Note: Marked as nullable in DB image
+        public long? PartNameId { get; set; } // Note: Marked as nullable in DB image 2
 
         public long? PartFamilyId { get; set; }
 
