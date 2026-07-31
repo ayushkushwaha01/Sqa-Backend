@@ -21,7 +21,7 @@ namespace sqa_core.Controllers
         }
 
         //[HttpGet("GetParametersByInspectionId/{inspectionId}")]
-        //public async Task<IActionResult> GetParametersByInspectionId(int inspectionId) //ff
+        //public async Task<IActionResult> GetParametersByInspectionId(int inspectionId)
         //{
         //    try
         //    {
