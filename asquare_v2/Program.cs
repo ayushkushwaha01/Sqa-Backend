@@ -47,14 +47,33 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // 🟢 6️⃣ CORS
+//builder.Services.AddCors(options =>
+//{
+//    options.AddPolicy("AllowAngular", policy =>
+//    {
+//        policy.WithOrigins(
+//            "http://qasqa.optionmatrix.co.in/",
+//            "https://qasqa.optionmatrix.co.in/"
+//        )
+//        .AllowAnyHeader()
+//        .AllowAnyMethod()
+//        .AllowCredentials();
+//    });
+//});
+
+
+// 🟢 6️⃣ CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
         policy.WithOrigins(
-            "http://localhost:4200",
-            "https://localhost:4200"
+            //"qasqa.optionmatrix.co.in",
+            //"qasqa.optionmatrix.co.in",
+            "http://localhost:4200",  
+            "http://localhost:5200"
         )
+        .SetIsOriginAllowed(origin => true) // Helper to ensure subdomain origins are trusted
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials();
