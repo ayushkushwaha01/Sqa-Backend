@@ -26,7 +26,12 @@ namespace sqa_core.Models
         [StringLength(255)]
         public string? Spec { get; set; }
 
+        [NotMapped]
+        public long? UnitId { get; set; }
+
+
         [StringLength(50)]
+       
         public string? Unit { get; set; }
 
         [StringLength(255)]
@@ -36,7 +41,7 @@ namespace sqa_core.Models
         public string? Max { get; set; }
 
         // FIX: Changed from long? to double? to match SQL float
-        public double? Defects { get; set; }
+        public String? Defects { get; set; }
 
         public bool? Okay { get; set; }
 
@@ -80,5 +85,7 @@ namespace sqa_core.Models
         public DateTime? DeletedDate { get; set; }
 
         public bool? IsDeleted { get; set; }
+
+        public string? DefectRate { get; set; }
     }
 }
