@@ -1,15 +1,16 @@
+﻿using Amazon.S3;
+using Amazon.S3.Model;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using sqa_core.Configuration;
 using sqa_core.Data;
 using sqa_core.Models;
-using sqa_core.Configuration;
 using System;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Text.Json;
-using Amazon.S3;
-using Amazon.S3.Model;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace sqa_core.Controllers
 {
@@ -38,6 +39,21 @@ namespace sqa_core.Controllers
         private readonly Amazon.RegionEndpoint _awsRegion = Amazon.RegionEndpoint.GetBySystemName(ConfigKey.Aws.Region);
         private readonly string _bucketName = ConfigKey.Aws.BucketName;
 
+
+
+
+        private long GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return string.IsNullOrEmpty(userIdClaim) ? 0 : long.Parse(userIdClaim);
+        }
+
+
+        private string GetCurrentUserType()
+        {
+            var userTypeClaim = User.FindFirstValue("UserType");
+            return string.IsNullOrEmpty(userTypeClaim) ? "Internal" : userTypeClaim;
+        }
         public InspectionCapaController(AppDbContext context)
         {
             _context = context;
@@ -362,69 +378,7 @@ namespace sqa_core.Controllers
 
 
 
-        //[HttpGet("GetPendingCapaRecords")]
-        //public async Task<IActionResult> GetPendingCapaRecords()
-        //{
-        //    try
-        //    {
-        //        var query = await (from capa in _context.InspectionCapas
-
-        //                               // 1. Join InspectionRef to get InspectionId
-        //                           join ir in _context.Inspectionrefs
-        //                           on capa.InspectionRefId equals ir.InspectionRefId
-
-        //                           // 2. Join Inspections to get SupplierId (using left join to be safe)
-        //                           join ins in _context.Inspections
-        //                           on ir.InspectionId equals ins.InspectionId into insJoin
-        //                           from ins in insJoin.DefaultIfEmpty()
-
-        //                               // 3. Join SupplierMaster to get SupplierName (using left join to be safe)
-        //                           join sup in _context.SupplierMasters // Change this to your actual DbSet name if different
-        //                           on ins.SupplierId equals sup.SupplierId into supJoin
-        //                           from sup in supJoin.DefaultIfEmpty()
-
-        //                           where ir.Okay == false
-        //                              && ir.IsDeleted == false
-        //                              && capa.IsDeleted == false
-        //                           select new
-        //                           {
-        //                               CapaId = capa.CapaId,
-
-        //                               // New Columns
-        //                               Status = capa.Status ?? 2, // 2 = Open as fallback if null
-        //                               Resolved = capa.Resolved ?? false,
-        //                               Description = capa.Description, // Make sure 'Description' is added to your C# model
-        //                               EtaDate = capa.EtaDate,
-        //                               AuditorRemarks = capa.AuditorRemarks,
-        //                               AuditeeResponse = capa.AuditeeResponse,
-
-        //                               // Existing/Mapped Columns
-        //                               Docs = (capa.PdfDocs != null || capa.ImageDocs != null) ? 1 : 0,
-        //                               Reference = ir.InspectionId.ToString(),
-        //                               ActionSubject = capa.Subject,
-        //                               SupplierName = sup != null ? sup.SupplierName : "N/A", // Fetched from Supplier table
-        //                               ActionType = capa.ActionType,
-        //                               AuditReference = ir.PartId.ToString(),
-        //                               ProcessCategory = capa.Class,
-        //                               SupplierRemarks = capa.SupplierRemarks,
-        //                               LogDate = capa.CreatedDate,
-        //                               DueDate = capa.DueDate,
-        //                               Completion = capa.CompletedDate,
-        //                               Severity = capa.SeverityId,
-        //                               Occurrence = capa.Occurrence,
-        //                               Detection = capa.Detection,
-        //                               RiskRating = capa.RiskRating, // Sends integer ID (3, 2, or 1)
-        //                               Rating = capa.SodScore,
-        //                               PdcaStatus = capa.PdcaStatus
-        //                           }).ToListAsync();
-
-        //        return Ok(new { success = true, data = query, message = "Pending CAPA fetched successfully." });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(500, new { success = false, message = "Error fetching CAPA records", error = ex.Message });
-        //    }
-        //}
+       
 
 
 
@@ -474,6 +428,47 @@ namespace sqa_core.Controllers
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         //[HttpGet("GetPendingCapaRecords")]
         //public async Task<IActionResult> GetPendingCapaRecords()
         //{
@@ -485,7 +480,7 @@ namespace sqa_core.Controllers
         //                                  // Join InspectionRef
         //                              join ir in _context.Inspectionrefs on capa.InspectionRefId equals ir.InspectionRefId
 
-        //                              // Join Inspections to get ReferenceId (e.g., "2026/00001" format)
+        //                              // Join Inspections to get ReferenceId
         //                              join ins in _context.Inspections on ir.InspectionId equals ins.InspectionId into insJoin
         //                              from ins in insJoin.DefaultIfEmpty()
 
@@ -497,6 +492,8 @@ namespace sqa_core.Controllers
         //                              select new
         //                              {
         //                                  capa.CapaId,
+        //                                  capa.InspectionRefId, // <-- ADDED THIS LINE
+
         //                                  Status = capa.Status ?? 2,
         //                                  Resolved = capa.Resolved ?? false,
         //                                  capa.Description,
@@ -505,7 +502,7 @@ namespace sqa_core.Controllers
         //                                  capa.AuditeeResponse,
         //                                  capa.PdfDocs,
         //                                  capa.ImageDocs,
-        //                                  Reference = ins != null ? ins.ReferenceId : "N/A", // From tbl_Inspections
+        //                                  Reference = ins != null ? ins.ReferenceId : "N/A",
         //                                  ActionSubject = capa.Subject,
         //                                  SupplierName = sup != null ? sup.SupplierName : "N/A",
         //                                  capa.ActionType,
@@ -527,6 +524,8 @@ namespace sqa_core.Controllers
         //        var query = rawQuery.Select(x => new
         //        {
         //            x.CapaId,
+        //            x.InspectionRefId, // <-- ADDED THIS LINE
+
         //            x.Status,
         //            x.Resolved,
         //            x.Description,
@@ -534,7 +533,7 @@ namespace sqa_core.Controllers
         //            x.AuditorRemarks,
         //            x.AuditeeResponse,
 
-        //            // Sum of Docs and Photos (Assuming they are comma-separated strings)
+        //            // Sum of Docs and Photos
         //            Docs = (string.IsNullOrEmpty(x.PdfDocs) ? 0 : x.PdfDocs.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Length) +
         //                   (string.IsNullOrEmpty(x.ImageDocs) ? 0 : x.ImageDocs.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Length),
 
@@ -568,98 +567,78 @@ namespace sqa_core.Controllers
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         [HttpGet("GetPendingCapaRecords")]
-        public async Task<IActionResult> GetPendingCapaRecords()
+        // 🔥 Added [FromQuery] to accept the supplierId from the Angular Service
+        public async Task<IActionResult> GetPendingCapaRecords([FromQuery] long? supplierId)
         {
             try
             {
-                // 1. Fetch raw data with all joins first
-                var rawQuery = await (from capa in _context.InspectionCapas
+                // 🔥 Get the Current User Id and Type from claims
+                long currentUserId = GetCurrentUserId();
+                string userType = GetCurrentUserType();
 
-                                          // Join InspectionRef
-                                      join ir in _context.Inspectionrefs on capa.InspectionRefId equals ir.InspectionRefId
+                // 1. Define the base query without executing it yet
+                var query = from capa in _context.InspectionCapas
+                                // Join InspectionRef
+                            join ir in _context.Inspectionrefs on capa.InspectionRefId equals ir.InspectionRefId
+                            // Join Inspections to get ReferenceId and SupplierId
+                            join ins in _context.Inspections on ir.InspectionId equals ins.InspectionId into insJoin
+                            from ins in insJoin.DefaultIfEmpty()
+                                // Join SupplierMaster
+                            join sup in _context.SupplierMasters on ins.SupplierId equals sup.SupplierId into supJoin
+                            from sup in supJoin.DefaultIfEmpty()
+                                // 🔥 Exclude deleted records (Already handled here)
+                            where ir.Okay == false && ir.IsDeleted == false && capa.IsDeleted == false
+                            select new { capa, ir, ins, sup };
 
-                                      // Join Inspections to get ReferenceId
-                                      join ins in _context.Inspections on ir.InspectionId equals ins.InspectionId into insJoin
-                                      from ins in insJoin.DefaultIfEmpty()
+                // 🔥 FILTERING LOGIC
+                if (userType.Equals("Supplier", StringComparison.OrdinalIgnoreCase))
+                {
+                    // If they are a supplier based on token, strictly lock it to their ID
+                    query = query.Where(x => x.ins != null && x.ins.SupplierId == currentUserId);
+                }
+                else if (supplierId.HasValue && supplierId.Value > 0)
+                {
+                    // If it's an Admin/Internal passing the supplierId from the frontend, filter by that
+                    query = query.Where(x => x.ins != null && x.ins.SupplierId == supplierId.Value);
+                }
 
-                                          // Join SupplierMaster
-                                      join sup in _context.SupplierMasters on ins.SupplierId equals sup.SupplierId into supJoin
-                                      from sup in supJoin.DefaultIfEmpty()
+                // 2. Project the data to the expected format and execute the query (fetch from DB)
+                var rawData = await query.Select(x => new
+                {
+                    x.capa.CapaId,
+                    x.capa.InspectionRefId,
+                    Status = x.capa.Status ?? 2,
+                    Resolved = x.capa.Resolved ?? false,
+                    x.capa.Description,
+                    x.capa.EtaDate,
+                    x.capa.AuditorRemarks,
+                    x.capa.AuditeeResponse,
+                    x.capa.PdfDocs,
+                    x.capa.ImageDocs,
+                    Reference = x.ins != null ? x.ins.ReferenceId : "N/A",
+                    ActionSubject = x.capa.Subject,
+                    SupplierName = x.sup != null ? x.sup.SupplierName : "N/A",
+                    x.capa.ActionType,
+                    AuditReference = x.ir.PartId.ToString(),
+                    ProcessCategory = x.capa.Class,
+                    x.capa.SupplierRemarks,
+                    LogDate = x.capa.CreatedDate,
+                    x.capa.DueDate,
+                    Completion = x.capa.CompletedDate,
+                    Severity = x.capa.SeverityId,
+                    x.capa.Occurrence,
+                    x.capa.Detection,
+                    x.capa.RiskRating,
+                    Rating = x.capa.SodScore,
+                    x.capa.PdcaStatus
+                }).ToListAsync();
 
-                                      where ir.Okay == false && ir.IsDeleted == false && capa.IsDeleted == false
-                                      select new
-                                      {
-                                          capa.CapaId,
-                                          capa.InspectionRefId, // <-- ADDED THIS LINE
-
-                                          Status = capa.Status ?? 2,
-                                          Resolved = capa.Resolved ?? false,
-                                          capa.Description,
-                                          capa.EtaDate,
-                                          capa.AuditorRemarks,
-                                          capa.AuditeeResponse,
-                                          capa.PdfDocs,
-                                          capa.ImageDocs,
-                                          Reference = ins != null ? ins.ReferenceId : "N/A",
-                                          ActionSubject = capa.Subject,
-                                          SupplierName = sup != null ? sup.SupplierName : "N/A",
-                                          capa.ActionType,
-                                          AuditReference = ir.PartId.ToString(),
-                                          ProcessCategory = capa.Class,
-                                          capa.SupplierRemarks,
-                                          LogDate = capa.CreatedDate,
-                                          capa.DueDate,
-                                          Completion = capa.CompletedDate,
-                                          Severity = capa.SeverityId,
-                                          capa.Occurrence,
-                                          capa.Detection,
-                                          capa.RiskRating,
-                                          Rating = capa.SodScore,
-                                          capa.PdcaStatus
-                                      }).ToListAsync();
-
-                // 2. Perform in-memory calculation for the Docs count
-                var query = rawQuery.Select(x => new
+                // 3. Perform in-memory calculation for the Docs count
+                var finalData = rawData.Select(x => new
                 {
                     x.CapaId,
-                    x.InspectionRefId, // <-- ADDED THIS LINE
-
+                    x.InspectionRefId,
                     x.Status,
                     x.Resolved,
                     x.Description,
@@ -689,19 +668,13 @@ namespace sqa_core.Controllers
                     x.PdcaStatus
                 });
 
-                return Ok(new { success = true, data = query, message = "Pending CAPA fetched successfully." });
+                return Ok(new { success = true, data = finalData, message = "Pending CAPA fetched successfully." });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { success = false, message = "Error fetching CAPA records", error = ex.Message });
             }
         }
-
-
-
-
-
-
 
 
 

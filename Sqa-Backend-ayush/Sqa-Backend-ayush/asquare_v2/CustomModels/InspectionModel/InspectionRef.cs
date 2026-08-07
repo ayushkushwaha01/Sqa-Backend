@@ -74,7 +74,7 @@ namespace sqa_core.Models
 
         public DateTime? CreatedDate { get; set; }
 
-        // FIX: Changed from int? to long? to match SQL bigint
+       
         public long? ModifiedBy { get; set; }
 
         public DateTime? ModifiedDate { get; set; }

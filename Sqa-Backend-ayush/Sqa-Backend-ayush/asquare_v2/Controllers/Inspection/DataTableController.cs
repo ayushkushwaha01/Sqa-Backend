@@ -4,6 +4,7 @@ using sqa_core.Data;
 using sqa_core.Models;
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -21,6 +22,18 @@ namespace sqa_core.Controllers
         }
 
 
+        private long GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return string.IsNullOrEmpty(userIdClaim) ? 0 : long.Parse(userIdClaim);
+        }
+
+
+        private string GetCurrentUserType()
+        {
+            var userTypeClaim = User.FindFirstValue("UserType");
+            return string.IsNullOrEmpty(userTypeClaim) ? "Internal" : userTypeClaim;
+        }
 
         //[HttpGet("get-all-records")]
         //public async Task<IActionResult> GetAllInspections()
@@ -170,156 +183,326 @@ namespace sqa_core.Controllers
 
 
 
-        [HttpGet("get-all-records")]
-        public async Task<IActionResult> GetAllInspections()
-        {
-            try
-            {
-                // 1. Fetch base inspection data from the database
-                var rawData = await (from i in _context.Inspections
-                                     join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
-                                     from stage in stageGroup.DefaultIfEmpty()
-                                     join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
-                                     from shift in shiftGroup.DefaultIfEmpty()
-                                     join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
-                                     from inspector in inspectorGroup.DefaultIfEmpty()
-                                     join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
-                                     from partFamily in pfGroup.DefaultIfEmpty()
-                                     join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
-                                     from partCode in pcGroup.DefaultIfEmpty()
-                                     join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
-                                     from batch in batchGroup.DefaultIfEmpty()
-                                     where i.IsDeleted != true && i.IsArchive != true
-                                     orderby i.CreatedDate descending
-                                     select new
-                                     {
-                                         i.InspectionId,
-                                         i.ReferenceId,
-                                         i.InspectionDate,
-                                         i.Time,
-                                         i.Remarks,
-                                         i.Publish,
-                                         i.BatchQuantity,
-                                         i.SampleQuantity,
-                                         i.StageId,
-                                         i.SupplierId,
-                                         i.ShiftId,
-                                         i.InspectorId,
-                                         i.PartFamilyId,
-                                         i.PartCodeId,
-                                         i.BatchNumberId,
-                                         StageName = stage != null ? stage.LookupName : null,
-                                         ShiftName = shift != null ? shift.LookupName : null,
-                                         InspectorName = inspector != null ? inspector.UserName : null,
-                                         PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
-                                         PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
-                                         BatchNumber = batch != null ? batch.BatchNumber : null
-                                     }).ToListAsync();
+        //[HttpGet("get-all-records")]
+        //public async Task<IActionResult> GetAllInspections()
+        //{
+        //    try
+        //    {
+        //        // 1. Fetch base inspection data from the database
+        //        var rawData = await (from i in _context.Inspections
+        //                             join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
+        //                             from stage in stageGroup.DefaultIfEmpty()
+        //                             join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
+        //                             from shift in shiftGroup.DefaultIfEmpty()
+        //                             join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
+        //                             from inspector in inspectorGroup.DefaultIfEmpty()
+        //                             join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
+        //                             from partFamily in pfGroup.DefaultIfEmpty()
+        //                             join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
+        //                             from partCode in pcGroup.DefaultIfEmpty()
+        //                             join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
+        //                             from batch in batchGroup.DefaultIfEmpty()
+        //                             where i.IsDeleted != true && i.IsArchive != true
+        //                             orderby i.CreatedDate descending
+        //                             select new
+        //                             {
+        //                                 i.InspectionId,
+        //                                 i.ReferenceId,
+        //                                 i.InspectionDate,
+        //                                 i.Time,
+        //                                 i.Remarks,
+        //                                 i.Publish,
+        //                                 i.BatchQuantity,
+        //                                 i.SampleQuantity,
+        //                                 i.StageId,
+        //                                 i.SupplierId,
+        //                                 i.ShiftId,
+        //                                 i.InspectorId,
+        //                                 i.PartFamilyId,
+        //                                 i.PartCodeId,
+        //                                 i.BatchNumberId,
+        //                                 StageName = stage != null ? stage.LookupName : null,
+        //                                 ShiftName = shift != null ? shift.LookupName : null,
+        //                                 InspectorName = inspector != null ? inspector.UserName : null,
+        //                                 PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
+        //                                 PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
+        //                                 BatchNumber = batch != null ? batch.BatchNumber : null
+        //                             }).ToListAsync();
 
-                var inspectionIds = rawData.Select(x => x.InspectionId).ToList();
+        //        var inspectionIds = rawData.Select(x => x.InspectionId).ToList();
 
-                // 2. Fetch Parameter counts
-                var paramCounts = await _context.Inspectionrefs
-                    .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true)
-                    .GroupBy(r => r.InspectionId)
-                    .Select(g => new { InspectionId = g.Key, Count = g.Count() })
-                    .ToDictionaryAsync(k => k.InspectionId, v => v.Count);
+        //        // 2. Fetch Parameter counts
+        //        var paramCounts = await _context.Inspectionrefs
+        //            .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true)
+        //            .GroupBy(r => r.InspectionId)
+        //            .Select(g => new { InspectionId = g.Key, Count = g.Count() })
+        //            .ToDictionaryAsync(k => k.InspectionId, v => v.Count);
 
-                // 3. Fetch Defects Data
-                var defectsData = await _context.InspectionDefects
-                    .Where(d => inspectionIds.Contains(d.InspectionId))
-                    .ToDictionaryAsync(k => k.InspectionId, v => v.Status);
+        //        // 3. Fetch Defects Data
+        //        var defectsData = await _context.InspectionDefects
+        //            .Where(d => inspectionIds.Contains(d.InspectionId))
+        //            .ToDictionaryAsync(k => k.InspectionId, v => v.Status);
 
-                // 4. NEW: Fetch DefectRates from Inspectionrefs and calculate the average per InspectionId
-                var refRates = await _context.Inspectionrefs
-                    .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true && r.DefectRate != null)
-                    .Select(r => new { r.InspectionId, r.DefectRate })
-                    .ToListAsync();
+        //        // 4. NEW: Fetch DefectRates from Inspectionrefs and calculate the average per InspectionId
+        //        var refRates = await _context.Inspectionrefs
+        //            .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true && r.DefectRate != null)
+        //            .Select(r => new { r.InspectionId, r.DefectRate })
+        //            .ToListAsync();
 
-                var avgRatesDict = refRates
-                    .GroupBy(r => r.InspectionId)
-                    .ToDictionary(
-                        g => g.Key,
-                        g =>
-                        {
-                            // Parse rates safely, ignoring nulls or empty strings
-                            var parsedRates = g.Select(x =>
-                            {
-                                string cleanString = x.DefectRate.Replace("%", "").Trim();
-                                return double.TryParse(cleanString, out double val) ? val : 0.0;
-                            }).ToList();
+        //        var avgRatesDict = refRates
+        //            .GroupBy(r => r.InspectionId)
+        //            .ToDictionary(
+        //                g => g.Key,
+        //                g =>
+        //                {
+        //                    // Parse rates safely, ignoring nulls or empty strings
+        //                    var parsedRates = g.Select(x =>
+        //                    {
+        //                        string cleanString = x.DefectRate.Replace("%", "").Trim();
+        //                        return double.TryParse(cleanString, out double val) ? val : 0.0;
+        //                    }).ToList();
 
-                            if (parsedRates.Any())
-                            {
-                                double average = parsedRates.Average();
-                                return $"{Math.Round(average, 1)}%";
-                            }
-                            return "0%";
-                        }
-                    );
+        //                    if (parsedRates.Any())
+        //                    {
+        //                        double average = parsedRates.Average();
+        //                        return $"{Math.Round(average, 1)}%";
+        //                    }
+        //                    return "0%";
+        //                }
+        //            );
 
-                // 5. Build Final Response Data
-                var finalData = rawData.Select(d =>
-                {
-                    // Extract Parameter count
-                    int pCount = paramCounts.ContainsKey(d.InspectionId) ? paramCounts[d.InspectionId] : 0;
+        //        // 5. Build Final Response Data
+        //        var finalData = rawData.Select(d =>
+        //        {
+        //            // Extract Parameter count
+        //            int pCount = paramCounts.ContainsKey(d.InspectionId) ? paramCounts[d.InspectionId] : 0;
 
-                    string defectsFraction = "0/0";
-                    if (defectsData.ContainsKey(d.InspectionId) && !string.IsNullOrEmpty(defectsData[d.InspectionId]))
-                    {
-                        try
-                        {
-                            var statusDict = JsonSerializer.Deserialize<Dictionary<string, int>>(defectsData[d.InspectionId]);
-                            if (statusDict != null && statusDict.Count > 0)
-                            {
-                                int totalDefects = statusDict.Count;
-                                int redcount = statusDict.Values.Count(v => v == 5); // 5 = Status map for red/bad
-                                defectsFraction = $"{redcount}/{totalDefects}";
-                            }
-                        }
-                        catch { /* Ignore invalid JSON */ }
-                    }
+        //            string defectsFraction = "0/0";
+        //            if (defectsData.ContainsKey(d.InspectionId) && !string.IsNullOrEmpty(defectsData[d.InspectionId]))
+        //            {
+        //                try
+        //                {
+        //                    var statusDict = JsonSerializer.Deserialize<Dictionary<string, int>>(defectsData[d.InspectionId]);
+        //                    if (statusDict != null && statusDict.Count > 0)
+        //                    {
+        //                        int totalDefects = statusDict.Count;
+        //                        int redcount = statusDict.Values.Count(v => v == 5); // 5 = Status map for red/bad
+        //                        defectsFraction = $"{redcount}/{totalDefects}";
+        //                    }
+        //                }
+        //                catch { /* Ignore invalid JSON */ }
+        //            }
 
-                    // Extract Average Defect Rate
-                    string avgErrorRate = avgRatesDict.ContainsKey(d.InspectionId) ? avgRatesDict[d.InspectionId] : "0%";
+        //            // Extract Average Defect Rate
+        //            string avgErrorRate = avgRatesDict.ContainsKey(d.InspectionId) ? avgRatesDict[d.InspectionId] : "0%";
 
-                    return new
-                    {
-                        inspectionId = d.InspectionId,
-                        referenceId = d.ReferenceId,
-                        inspectionDate = d.InspectionDate,
-                        time = d.Time,
-                        remarks = d.Remarks,
-                        defects = defectsFraction,          // Overrides the DB NULL with dynamic string
-                        parameters = pCount.ToString(),     // Overrides the DB NULL with dynamic count
-                        errorRate = avgErrorRate,           // OVERRIDDEN: Now uses the calculated average
-                        publish = d.Publish,
-                        batchQuantity = d.BatchQuantity,
-                        sampleQuantity = d.SampleQuantity,
-                        stageId = d.StageId,
-                        supplierId = d.SupplierId,
-                        shiftId = d.ShiftId,
-                        inspectorId = d.InspectorId,
-                        partFamilyId = d.PartFamilyId,
-                        partCodeId = d.PartCodeId,
-                        batchNumberId = d.BatchNumberId,
-                        stageName = d.StageName,
-                        shiftName = d.ShiftName,
-                        inspectorName = d.InspectorName,
-                        partFamilyName = d.PartFamilyName,
-                        partMasterCode = d.PartMasterCode,
-                        batchNumber = d.BatchNumber
-                    };
-                }).ToList();
+        //            return new
+        //            {
+        //                inspectionId = d.InspectionId,
+        //                referenceId = d.ReferenceId,
+        //                inspectionDate = d.InspectionDate,
+        //                time = d.Time,
+        //                remarks = d.Remarks,
+        //                defects = defectsFraction,          // Overrides the DB NULL with dynamic string
+        //                parameters = pCount.ToString(),     // Overrides the DB NULL with dynamic count
+        //                errorRate = avgErrorRate,           // OVERRIDDEN: Now uses the calculated average
+        //                publish = d.Publish,
+        //                batchQuantity = d.BatchQuantity,
+        //                sampleQuantity = d.SampleQuantity,
+        //                stageId = d.StageId,
+        //                supplierId = d.SupplierId,
+        //                shiftId = d.ShiftId,
+        //                inspectorId = d.InspectorId,
+        //                partFamilyId = d.PartFamilyId,
+        //                partCodeId = d.PartCodeId,
+        //                batchNumberId = d.BatchNumberId,
+        //                stageName = d.StageName,
+        //                shiftName = d.ShiftName,
+        //                inspectorName = d.InspectorName,
+        //                partFamilyName = d.PartFamilyName,
+        //                partMasterCode = d.PartMasterCode,
+        //                batchNumber = d.BatchNumber
+        //            };
+        //        }).ToList();
 
-                return Ok(new { Data = finalData, Success = true });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { Success = false, Message = ex.Message });
-            }
-        }
+        //        return Ok(new { Data = finalData, Success = true });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, new { Success = false, Message = ex.Message });
+        //    }
+        //}
 
+
+
+
+
+
+
+
+
+        //[HttpGet("get-all-records")]
+        //public async Task<IActionResult> GetAllInspections()
+        //{
+        //    try
+        //    {
+        //        // 🔥 Get the Current User Id and Type
+        //        long currentUserId = GetCurrentUserId();
+        //        string userType = GetCurrentUserType();
+
+        //        // 1. Define the base query without executing it yet
+        //        var query = from i in _context.Inspections
+        //                    join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
+        //                    from stage in stageGroup.DefaultIfEmpty()
+        //                    join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
+        //                    from shift in shiftGroup.DefaultIfEmpty()
+        //                    join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
+        //                    from inspector in inspectorGroup.DefaultIfEmpty()
+        //                    join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
+        //                    from partFamily in pfGroup.DefaultIfEmpty()
+        //                    join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
+        //                    from partCode in pcGroup.DefaultIfEmpty()
+        //                    join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
+        //                    from batch in batchGroup.DefaultIfEmpty()
+        //                    where i.IsDeleted != true && i.IsArchive != true
+        //                    orderby i.CreatedDate descending
+        //                    select new
+        //                    {
+        //                        i.InspectionId,
+        //                        i.ReferenceId,
+        //                        i.InspectionDate,
+        //                        i.Time,
+        //                        i.Remarks,
+        //                        i.Publish,
+        //                        i.BatchQuantity,
+        //                        i.SampleQuantity,
+        //                        i.StageId,
+        //                        i.SupplierId,
+        //                        i.ShiftId,
+        //                        i.InspectorId,
+        //                        i.PartFamilyId,
+        //                        i.PartCodeId,
+        //                        i.BatchNumberId,
+        //                        StageName = stage != null ? stage.LookupName : null,
+        //                        ShiftName = shift != null ? shift.LookupName : null,
+        //                        InspectorName = inspector != null ? inspector.UserName : null,
+        //                        PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
+        //                        PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
+        //                        BatchNumber = batch != null ? batch.BatchNumber : null
+        //                    };
+
+        //        // 🔥 If logged in as Supplier, only return inspections assigned to their SupplierId
+        //        if (userType == "Supplier")
+        //        {
+        //            query = query.Where(x => x.SupplierId == currentUserId);
+        //        }
+
+        //        // Execute the query to fetch the filtered raw data
+        //        var rawData = await query.ToListAsync();
+
+        //        var inspectionIds = rawData.Select(x => x.InspectionId).ToList();
+
+        //        // 2. Fetch Parameter counts
+        //        var paramCounts = await _context.Inspectionrefs
+        //            .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true)
+        //            .GroupBy(r => r.InspectionId)
+        //            .Select(g => new { InspectionId = g.Key, Count = g.Count() })
+        //            .ToDictionaryAsync(k => k.InspectionId, v => v.Count);
+
+        //        // 3. Fetch Defects Data
+        //        var defectsData = await _context.InspectionDefects
+        //            .Where(d => inspectionIds.Contains(d.InspectionId))
+        //            .ToDictionaryAsync(k => k.InspectionId, v => v.Status);
+
+        //        // 4. Fetch DefectRates from Inspectionrefs and calculate the average per InspectionId
+        //        var refRates = await _context.Inspectionrefs
+        //            .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true && r.DefectRate != null)
+        //            .Select(r => new { r.InspectionId, r.DefectRate })
+        //            .ToListAsync();
+
+        //        var avgRatesDict = refRates
+        //            .GroupBy(r => r.InspectionId)
+        //            .ToDictionary(
+        //                g => g.Key,
+        //                g =>
+        //                {
+        //                    // Parse rates safely, ignoring nulls or empty strings
+        //                    var parsedRates = g.Select(x =>
+        //                    {
+        //                        string cleanString = x.DefectRate.Replace("%", "").Trim();
+        //                        return double.TryParse(cleanString, out double val) ? val : 0.0;
+        //                    }).ToList();
+
+        //                    if (parsedRates.Any())
+        //                    {
+        //                        double average = parsedRates.Average();
+        //                        return $"{Math.Round(average, 1)}%";
+        //                    }
+        //                    return "0%";
+        //                }
+        //            );
+
+        //        // 5. Build Final Response Data
+        //        var finalData = rawData.Select(d =>
+        //        {
+        //            // Extract Parameter count
+        //            int pCount = paramCounts.ContainsKey(d.InspectionId) ? paramCounts[d.InspectionId] : 0;
+
+        //            string defectsFraction = "0/0";
+        //            if (defectsData.ContainsKey(d.InspectionId) && !string.IsNullOrEmpty(defectsData[d.InspectionId]))
+        //            {
+        //                try
+        //                {
+        //                    var statusDict = JsonSerializer.Deserialize<Dictionary<string, int>>(defectsData[d.InspectionId]);
+        //                    if (statusDict != null && statusDict.Count > 0)
+        //                    {
+        //                        int totalDefects = statusDict.Count;
+        //                        int redcount = statusDict.Values.Count(v => v == 5); // 5 = Status map for red/bad
+        //                        defectsFraction = $"{redcount}/{totalDefects}";
+        //                    }
+        //                }
+        //                catch { /* Ignore invalid JSON */ }
+        //            }
+
+        //            // Extract Average Defect Rate
+        //            string avgErrorRate = avgRatesDict.ContainsKey(d.InspectionId) ? avgRatesDict[d.InspectionId] : "0%";
+
+        //            return new
+        //            {
+        //                inspectionId = d.InspectionId,
+        //                referenceId = d.ReferenceId,
+        //                inspectionDate = d.InspectionDate,
+        //                time = d.Time,
+        //                remarks = d.Remarks,
+        //                defects = defectsFraction,          // Overrides the DB NULL with dynamic string
+        //                parameters = pCount.ToString(),     // Overrides the DB NULL with dynamic count
+        //                errorRate = avgErrorRate,           // OVERRIDDEN: Now uses the calculated average
+        //                publish = d.Publish,
+        //                batchQuantity = d.BatchQuantity,
+        //                sampleQuantity = d.SampleQuantity,
+        //                stageId = d.StageId,
+        //                supplierId = d.SupplierId,
+        //                shiftId = d.ShiftId,
+        //                inspectorId = d.InspectorId,
+        //                partFamilyId = d.PartFamilyId,
+        //                partCodeId = d.PartCodeId,
+        //                batchNumberId = d.BatchNumberId,
+        //                stageName = d.StageName,
+        //                shiftName = d.ShiftName,
+        //                inspectorName = d.InspectorName,
+        //                partFamilyName = d.PartFamilyName,
+        //                partMasterCode = d.PartMasterCode,
+        //                batchNumber = d.BatchNumber
+        //            };
+        //        }).ToList();
+
+        //        return Ok(new { Data = finalData, Success = true });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, new { Success = false, Message = ex.Message });
+        //    }
+        //}
 
 
 
@@ -543,7 +726,7 @@ namespace sqa_core.Controllers
                         if (defectIds != null && defectIds.Any())
                         {
                             // Initialize status for all fetched defects to 5 (Gray)
-                            var initialStatuses = defectIds.ToDictionary(id => id.ToString(), id => 5);
+                            var initialStatuses = defectIds.ToDictionary(id => id.ToString(), id => 1);
 
                             var newInspectionDefect = new InspectionDefects
                             {
@@ -794,13 +977,189 @@ namespace sqa_core.Controllers
 
 
 
-         
+        [HttpGet("get-all-records")]
+        public async Task<IActionResult> GetAllInspections([FromQuery] long? supplierId)
+        {
+            try
+            {
+                // Get the Current User Id and Type from claims
+                long currentUserId = GetCurrentUserId();
+                string userType = GetCurrentUserType();
+
+                // 1. Define the base query without executing it yet.
+                // 🔥 Notice the WHERE clause: This ensures deleted/archived records are NEVER visible to anyone.
+                var query = from i in _context.Inspections
+                            join stage in _context.Lookups on i.StageId equals stage.LookupId into stageGroup
+                            from stage in stageGroup.DefaultIfEmpty()
+                            join shift in _context.Lookups on i.ShiftId equals shift.LookupId into shiftGroup
+                            from shift in shiftGroup.DefaultIfEmpty()
+                            join inspector in _context.Users on i.InspectorId equals inspector.UserId into inspectorGroup
+                            from inspector in inspectorGroup.DefaultIfEmpty()
+                            join partFamily in _context.PartFamilies on i.PartFamilyId equals partFamily.PartFamilyId into pfGroup
+                            from partFamily in pfGroup.DefaultIfEmpty()
+                            join partCode in _context.PartMasters on i.PartCodeId equals partCode.PartMasterId into pcGroup
+                            from partCode in pcGroup.DefaultIfEmpty()
+                            join batch in _context.BatchMasters on i.BatchNumberId equals batch.BatchId into batchGroup
+                            from batch in batchGroup.DefaultIfEmpty()
+                            where i.IsDeleted != true && i.IsArchive != true // <-- Excludes deleted records
+                            orderby i.CreatedDate descending
+                            select new
+                            {
+                                i.InspectionId,
+                                i.ReferenceId,
+                                i.InspectionDate,
+                                i.Time,
+                                i.Remarks,
+                                i.Publish,
+                                i.BatchQuantity,
+                                i.SampleQuantity,
+                                i.StageId,
+                                i.SupplierId,
+                                i.ShiftId,
+                                i.InspectorId,
+                                i.PartFamilyId,
+                                i.PartCodeId,
+                                i.BatchNumberId,
+                                StageName = stage != null ? stage.LookupName : null,
+                                ShiftName = shift != null ? shift.LookupName : null,
+                                InspectorName = inspector != null ? inspector.UserName : null,
+                                PartFamilyName = partFamily != null ? partFamily.PartFamilyName : null,
+                                PartMasterCode = partCode != null ? partCode.PartMasterCode : null,
+                                BatchNumber = batch != null ? batch.BatchNumber : null
+                            };
+
+                // 🔥 FILTERING LOGIC
+                if (userType.Equals("Supplier", StringComparison.OrdinalIgnoreCase))
+                {
+                    // If they are a supplier based on token, strictly lock it to their ID.
+                    query = query.Where(x => x.SupplierId == currentUserId);
+                }
+                else
+                {
+                    // If they are Admin/Internal AND a supplierId was passed from the frontend, filter by it.
+                    // If supplierId is null or 0, this is skipped, which means ALL records will be returned.
+                    if (supplierId.HasValue && supplierId.Value > 0)
+                    {
+                        query = query.Where(x => x.SupplierId == supplierId.Value);
+                    }
+                }
+
+                // Execute the query to fetch the filtered raw data
+                var rawData = await query.ToListAsync();
+
+                var inspectionIds = rawData.Select(x => x.InspectionId).ToList();
+
+                // 2. Fetch Parameter counts
+                var paramCounts = await _context.Inspectionrefs
+                    .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true)
+                    .GroupBy(r => r.InspectionId)
+                    .Select(g => new { InspectionId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(k => k.InspectionId, v => v.Count);
+
+                // 3. Fetch Defects Data
+                var defectsData = await _context.InspectionDefects
+                    .Where(d => inspectionIds.Contains(d.InspectionId))
+                    .ToDictionaryAsync(k => k.InspectionId, v => v.Status);
+
+                // 4. Fetch DefectRates from Inspectionrefs and calculate the average per InspectionId
+                var refRates = await _context.Inspectionrefs
+                    .Where(r => inspectionIds.Contains(r.InspectionId) && r.IsDeleted != true && r.DefectRate != null)
+                    .Select(r => new { r.InspectionId, r.DefectRate })
+                    .ToListAsync();
+
+                var avgRatesDict = refRates
+                    .GroupBy(r => r.InspectionId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g =>
+                        {
+                            // Parse rates safely, ignoring nulls or empty strings
+                            var parsedRates = g.Select(x =>
+                            {
+                                string cleanString = x.DefectRate.Replace("%", "").Trim();
+                                return double.TryParse(cleanString, out double val) ? val : 0.0;
+                            }).ToList();
+
+                            if (parsedRates.Any())
+                            {
+                                double average = parsedRates.Average();
+                                return $"{Math.Round(average, 1)}%";
+                            }
+                            return "0%";
+                        }
+                    );
+
+                // 5. Build Final Response Data
+                var finalData = rawData.Select(d =>
+                {
+                    // Extract Parameter count
+                    int pCount = paramCounts.ContainsKey(d.InspectionId) ? paramCounts[d.InspectionId] : 0;
+
+                    string defectsFraction = "0/0";
+                    if (defectsData.ContainsKey(d.InspectionId) && !string.IsNullOrEmpty(defectsData[d.InspectionId]))
+                    {
+                        try
+                        {
+                            var statusDict = JsonSerializer.Deserialize<Dictionary<string, int>>(defectsData[d.InspectionId]);
+                            if (statusDict != null && statusDict.Count > 0)
+                            {
+                                int totalDefects = statusDict.Count;
+                                int redcount = statusDict.Values.Count(v => v == 5); // 5 = Status map for red/bad
+                                defectsFraction = $"{redcount}/{totalDefects}";
+                            }
+                        }
+                        catch { /* Ignore invalid JSON */ }
+                    }
+
+                    // Extract Average Defect Rate
+                    string avgErrorRate = avgRatesDict.ContainsKey(d.InspectionId) ? avgRatesDict[d.InspectionId] : "0%";
+
+                    return new
+                    {
+                        inspectionId = d.InspectionId,
+                        referenceId = d.ReferenceId,
+                        inspectionDate = d.InspectionDate,
+                        time = d.Time,
+                        remarks = d.Remarks,
+                        defects = defectsFraction,
+                        parameters = pCount.ToString(),
+                        errorRate = avgErrorRate,
+                        publish = d.Publish,
+                        batchQuantity = d.BatchQuantity,
+                        sampleQuantity = d.SampleQuantity,
+                        stageId = d.StageId,
+                        supplierId = d.SupplierId,
+                        shiftId = d.ShiftId,
+                        inspectorId = d.InspectorId,
+                        partFamilyId = d.PartFamilyId,
+                        partCodeId = d.PartCodeId,
+                        batchNumberId = d.BatchNumberId,
+                        stageName = d.StageName,
+                        shiftName = d.ShiftName,
+                        inspectorName = d.InspectorName,
+                        partFamilyName = d.PartFamilyName,
+                        partMasterCode = d.PartMasterCode,
+                        batchNumber = d.BatchNumber
+                    };
+                }).ToList();
+
+                return Ok(new { Data = finalData, Success = true });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Success = false, Message = ex.Message });
+            }
+        }
+
+
 
 
 
 
 
     }
+
+
 
 
 
